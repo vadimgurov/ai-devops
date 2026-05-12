@@ -1,0 +1,9 @@
+services:
+  ai-devops:
+    build: .
+    restart: unless-stopped
+    env_file: /etc/ai-devops.env
+    volumes:
+      - ./kb:/app/kb
+      - ./logs:/app/logs
+      - ./repos:/app/repos

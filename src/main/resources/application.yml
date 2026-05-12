@@ -1,0 +1,40 @@
+logging:
+  file:
+    name: logs/devops-agent.log
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 14
+  level:
+    com.vadim.devops: DEBUG
+
+spring:
+  main:
+    web-application-type: none
+  task:
+    scheduling:
+      pool:
+        size: 4
+  config:
+    import: optional:file:./secrets.properties
+  ai:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY}
+      chat:
+        options:
+          model: deepseek-v4-pro
+
+devops:
+  kb:
+    path: ${KB_PATH:./kb}
+  monitoring:
+    cheap-check-interval-ms: 20000
+    slow-check-interval-ms: 60000
+    bash-timeout-seconds: 30
+    profiling-duration-seconds: 60
+    profiling-command-timeout-seconds: 90
+  telegram:
+    token: ${TELEGRAM_TOKEN}
+    operator-chat-id: ${TELEGRAM_CHAT_ID}
+  search:
+    tavily-api-key: ${TAVILY_API_KEY}
