@@ -327,6 +327,20 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
             }
         }
 
+        if (host.alertTypes() != null && !host.alertTypes().isEmpty())
+            sb.append("\n⚠️ Фильтр алертов: ").append(host.alertTypes()).append("\n");
+
+        if (host.telemetry() != null && !host.telemetry().isEmpty()) {
+            sb.append("\n<b>Телеметрия:</b>\n");
+            for (var t : host.telemetry()) {
+                sb.append("• ").append(t.name())
+                  .append(" threshold=").append(t.threshold());
+                if (t.minDurationMs() != null)
+                    sb.append(" minDuration=").append(t.minDurationMs() / 1000).append("s");
+                sb.append("\n  <code>").append(t.command()).append("</code>\n");
+            }
+        }
+
         if (rows.isEmpty()) sendReply(chatId, sb.toString());
         else sendWithKeyboard(chatId, sb.toString(), rows.subList(0, Math.min(rows.size(), MAX_KEYBOARD_BUTTONS)));
     }
@@ -343,9 +357,12 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         sb.append("<b>").append(s.id()).append("</b> (").append(s.runtime()).append(")\n");
         if (s.systemdUnit() != null) sb.append("Unit: <code>").append(s.systemdUnit()).append("</code>\n");
         if (s.healthCheck() != null) sb.append("Health: <code>").append(s.healthCheck()).append("</code>\n");
+        if (s.repoUrl() != null) sb.append("Repo: <code>").append(s.repoUrl()).append("</code>\n");
         if (s.sourcesPath() != null) sb.append("Sources: <code>").append(s.sourcesPath()).append("</code>\n");
         if (s.configFiles() != null && !s.configFiles().isEmpty())
             sb.append("Configs: ").append(String.join(", ", s.configFiles())).append("\n");
+        if (s.allowedActions() != null && !s.allowedActions().isEmpty())
+            sb.append("AllowedActions: ").append(s.allowedActions()).append("\n");
 
         var rows = new ArrayList<InlineKeyboardRow>();
         if (hasIncident) {
