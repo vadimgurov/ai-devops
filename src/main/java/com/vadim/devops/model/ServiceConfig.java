@@ -16,6 +16,7 @@ public record ServiceConfig(
         String versionUrl,
         String sourcesPath,
         String repoUrl,
+        String logsCommand,     // shell command to read logs, e.g. journalctl -u crm.service -n 200
         List<String> configFiles,
         List<String> allowedActions
 ) {}

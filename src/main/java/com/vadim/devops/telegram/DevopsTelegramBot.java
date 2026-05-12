@@ -354,9 +354,14 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         var s = serviceOpt.get();
         var hasIncident = incidentManager.hasOpenIncident(hostId, serviceId);
         var sb = new StringBuilder(hasIncident ? "🔴 " : "🟢 ");
-        sb.append("<b>").append(s.id()).append("</b> (").append(s.runtime()).append(")\n");
+        sb.append("<b>").append(s.id()).append("</b>");
+        if (s.name() != null && !s.name().equals(s.id())) sb.append(" — ").append(s.name());
+        sb.append(" (").append(s.runtime()).append(")\n");
         if (s.systemdUnit() != null) sb.append("Unit: <code>").append(s.systemdUnit()).append("</code>\n");
+        if (s.containerName() != null) sb.append("Container: <code>").append(s.containerName()).append("</code>\n");
         if (s.healthCheck() != null) sb.append("Health: <code>").append(s.healthCheck()).append("</code>\n");
+        if (s.logsCommand() != null) sb.append("Logs: <code>").append(s.logsCommand()).append("</code>\n");
+        if (s.versionUrl() != null) sb.append("VersionUrl: <code>").append(s.versionUrl()).append("</code>\n");
         if (s.repoUrl() != null) sb.append("Repo: <code>").append(s.repoUrl()).append("</code>\n");
         if (s.sourcesPath() != null) sb.append("Sources: <code>").append(s.sourcesPath()).append("</code>\n");
         if (s.configFiles() != null && !s.configFiles().isEmpty())

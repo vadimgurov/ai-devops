@@ -49,6 +49,9 @@ public class InventoryTool {
                         sb.append(" repoUrl=").append(s.repoUrl())
                           .append(" [вызови updateSourceCode перед чтением кода]");
                     }
+                    if (s.logsCommand() != null) {
+                        sb.append(" logsCommand=").append(s.logsCommand());
+                    }
                     if (s.configFiles() != null && !s.configFiles().isEmpty()) {
                         sb.append(" configFiles=").append(s.configFiles());
                     }
@@ -132,17 +135,23 @@ public class InventoryTool {
         }
     }
 
-    @Tool(description = "Сохранить сервис для хоста в инвентори. Вызывай после того как выяснил детали сервиса через SSH. repoUrl — git-репозиторий с исходниками (например git@github.com:user/repo.git), null если неизвестен. healthCheck — shell-команда для проверки живости (exit 0 = жив), например: curl -fsS --max-time 5 http://localhost:8080/actuator/health > /dev/null")
+    @Tool(description = """
+            Сохранить сервис для хоста в инвентори. Вызывай после того как выяснил детали сервиса через SSH.
+            repoUrl — git-репозиторий с исходниками (например git@github.com:user/repo.git), null если неизвестен.
+            healthCheck — shell-команда для проверки живости (exit 0 = жив), например: curl -fsS --max-time 5 http://localhost:8080/actuator/health > /dev/null
+            logsCommand — shell-команда для чтения логов, например:
+              systemd: journalctl -u crm.service -n 200 --no-pager
+              docker:  docker logs bin-kb --tail 200
+            """)
     public String saveService(String hostId, String id, String name, String runtime,
                               String systemdUnit, String healthCheck, String repoUrl,
-                              List<String> configFiles, List<String> allowedActions) {
+                              String logsCommand, List<String> configFiles, List<String> allowedActions) {
         log.info("saveService hostId={} id={} unit={}", hostId, id, systemdUnit);
         try {
             var service = new ServiceConfig(id, name, hostId, runtime, systemdUnit,
-                    null, healthCheck, null, null, repoUrl, configFiles, allowedActions);
+                    null, healthCheck, null, null, repoUrl, logsCommand, configFiles, allowedActions);
             inventoryLoader.saveService(hostId, service);
-            var result = "Сервис '%s' сохранён для хоста '%s'.".formatted(id, hostId);
-            return result;
+            return "Сервис '%s' сохранён для хоста '%s'.".formatted(id, hostId);
         } catch (IOException e) {
             return "Ошибка сохранения сервиса: " + e.getMessage();
         }
