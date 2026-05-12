@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR=${APP_DIR:-/opt/ai-devops}
 ENV_FILE=${ENV_FILE:-/etc/ai-devops.env}
 APP_USER=${APP_USER:-$(whoami)}
-REPO=${REPO:?Укажи репозиторий: REPO=git@github.com:user/ai-devops.git bash bin/server-setup.sh}
+REPO=git@github.com:vadimgurov/ai-devops.git
 
 echo "==> Docker"
 if ! command -v docker &> /dev/null; then
