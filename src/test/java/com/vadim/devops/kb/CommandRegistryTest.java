@@ -88,6 +88,14 @@ class CommandRegistryTest {
     }
 
     @Test
+    void classify_journalctl_withSinceUntilAndGrep_readOnly() {
+        // Реальный кейс: --since/--until + grep — должен быть read-only без записи в yaml
+        var cmd = "journalctl -u crm.service --since '2026-05-12 15:10:00' --until '2026-05-12 15:18:00'" +
+                  " 2>/dev/null | grep -B5 -A5 'GOAWAY received'";
+        assertThat(registry.classify(cmd)).isEqualTo(CommandRegistry.Classification.READ_ONLY);
+    }
+
+    @Test
     void classify_withSudo_stripsWrapper() {
         assertThat(registry.classify("sudo systemctl status app"))
                 .isEqualTo(CommandRegistry.Classification.READ_ONLY);

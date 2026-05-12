@@ -49,14 +49,24 @@ public class InventoryTool {
                         sb.append(" repoUrl=").append(s.repoUrl())
                           .append(" [вызови updateSourceCode перед чтением кода]");
                     }
+                    if (s.configFiles() != null && !s.configFiles().isEmpty()) {
+                        sb.append(" configFiles=").append(s.configFiles());
+                    }
+                    if (s.allowedActions() != null && !s.allowedActions().isEmpty()) {
+                        sb.append(" allowedActions=").append(s.allowedActions());
+                    }
                     sb.append("\n");
                 });
             }
             if (h.telemetry() != null && !h.telemetry().isEmpty()) {
-                h.telemetry().forEach(t ->
+                h.telemetry().forEach(t -> {
                     sb.append("  телеметрия: ").append(t.name())
-                      .append(" threshold=").append(t.threshold())
-                      .append(" cmd=").append(t.command()).append("\n"));
+                      .append(" threshold=").append(t.threshold());
+                    if (t.minDurationMs() != null) {
+                        sb.append(" minDurationMs=").append(t.minDurationMs());
+                    }
+                    sb.append(" cmd=").append(t.command()).append("\n");
+                });
             }
         });
         var result = sb.toString();
@@ -78,10 +88,11 @@ public class InventoryTool {
     }
 
     @Tool(description = """
-            Задать фильтр типов алертов для хоста. Если список задан — агент реагирует ТОЛЬКО на эти типы аномалий.
-            Типы: SERVICE_DOWN, HEALTH_FAIL, METRIC_HIGH, EXCEPTION_BURST.
+            Задать фильтр типов алертов для хоста. Фильтр применяется ко ВСЕМ типам аномалий без исключения:
+            SERVICE_DOWN, HEALTH_FAIL, METRIC_HIGH, EXCEPTION_BURST.
+            Если список задан — агент реагирует ТОЛЬКО на перечисленные типы, все остальные игнорируются.
             Пустой список или null — реагировать на всё (поведение по умолчанию).
-            Пример: ["EXCEPTION_BURST"] — только исключения в логах, игнорировать CPU/RAM/health.
+            Пример: ["EXCEPTION_BURST"] — только исключения в логах, SERVICE_DOWN/HEALTH_FAIL/METRIC_HIGH игнорируются.
             """)
     public String setHostAlertTypes(String hostId, List<String> alertTypes) {
         log.info("setHostAlertTypes hostId={} alertTypes={}", hostId, alertTypes);
@@ -101,10 +112,11 @@ public class InventoryTool {
     }
 
     @Tool(description = """
-            Добавить или обновить телеметрическую проверку для хоста.
+            Добавить или обновить телеметрическую проверку для хоста. Если проверка с таким именем уже существует — она будет заменена (upsert по имени).
             Команда должна выводить одно число (например процент). threshold — при превышении открывается инцидент.
             minDurationMs — минимальная длительность нарушения (в мс) перед открытием инцидента.
             Например 300000 (5 минут) чтобы игнорировать кратковременные CPU-спайки. null — реагировать сразу.
+            Чтобы изменить threshold или minDurationMs — вызови с тем же name: старая запись удалится, запишется новая.
             """)
     public String saveTelemetryCheck(String hostId, String name, String command, double threshold, Long minDurationMs) {
         log.info("saveTelemetryCheck hostId={} name={} threshold={} minDurationMs={}", hostId, name, threshold, minDurationMs);

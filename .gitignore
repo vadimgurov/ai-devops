@@ -51,7 +51,7 @@ secrets.properties
 .env
 
 ### KB — runtime данные и конфиги хостов, не коммитить ###
-kb/
+/kb/
 
 ### Logs ###
 logs/

@@ -32,6 +32,13 @@ public class CommandRegistry {
     private static final Set<String> MODULE_BASES = Set.of("python", "python3");
     private static final Set<String> SKIPPED_ALWAYS_ALLOW_BASES = Set.of(
             "sleep", "echo", "true", "false", ":");
+    // Команды, которые всегда read-only по определению — не требуют записи в allowed_commands.yaml
+    private static final Set<String> BUILTIN_READ_ONLY_BASES = Set.of(
+            "journalctl", "cat", "ls", "find", "grep", "ps", "df", "free", "top", "htop",
+            "tail", "head", "less", "more", "stat", "file", "which", "whoami", "hostname",
+            "uname", "uptime", "date", "id", "env", "printenv", "netstat", "ss", "ip",
+            "ping", "traceroute", "nslookup", "dig", "curl", "wget", "lsof", "du",
+            "wc", "sort", "uniq", "awk", "cut", "tr", "diff", "md5sum", "sha256sum");
     private static final Pattern LEADING_ASSIGNMENT = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*=");
 
     private final Path registryFile;
@@ -132,6 +139,10 @@ public class CommandRegistry {
             if (candidates.stream().anyMatch(candidate -> matches(candidate, prefix))) {
                 return Classification.WRITE_ACTION;
             }
+        }
+        var tokens = splitWords(normalized);
+        if (!tokens.isEmpty() && BUILTIN_READ_ONLY_BASES.contains(tokens.get(0).toLowerCase(Locale.ROOT))) {
+            return Classification.READ_ONLY;
         }
         for (var prefix : registry.readOnlyPrefixes()) {
             if (candidates.stream().anyMatch(candidate -> matches(candidate, prefix))) {
