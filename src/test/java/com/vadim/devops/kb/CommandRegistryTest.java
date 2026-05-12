@@ -102,6 +102,22 @@ class CommandRegistryTest {
     }
 
     @Test
+    void classify_findWithEchoAndSudoCat_readOnly() {
+        // Реальный кейс: find + echo + sudo cat в цепочке — все read-only
+        var cmd = "find /opt/crm -type f -name '*.properties' 2>/dev/null | head -10" +
+                  " && echo '===' && cat /opt/crm/application.properties 2>/dev/null" +
+                  " || echo 'no properties file'" +
+                  " && echo '===' && sudo cat /etc/mysql/mysql.conf.d/mysqld.cnf 2>/dev/null | head -40";
+        assertThat(registry.classify(cmd)).isEqualTo(CommandRegistry.Classification.READ_ONLY);
+    }
+
+    @Test
+    void classify_lsWithEchoAndFind_readOnly() {
+        var cmd = "ls -la /home/ubuntu/crm/ && echo '===' && find /home/ubuntu/crm -name 'application*.properties' 2>/dev/null";
+        assertThat(registry.classify(cmd)).isEqualTo(CommandRegistry.Classification.READ_ONLY);
+    }
+
+    @Test
     void addReadOnlyPrefix_persistsAndClassifies() {
         registry.addReadOnlyPrefix("df -h");
 

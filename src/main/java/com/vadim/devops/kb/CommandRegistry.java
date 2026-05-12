@@ -38,7 +38,10 @@ public class CommandRegistry {
             "tail", "head", "less", "more", "stat", "file", "which", "whoami", "hostname",
             "uname", "uptime", "date", "id", "env", "printenv", "netstat", "ss", "ip",
             "ping", "traceroute", "nslookup", "dig", "curl", "wget", "lsof", "du",
-            "wc", "sort", "uniq", "awk", "cut", "tr", "diff", "md5sum", "sha256sum");
+            "wc", "sort", "uniq", "awk", "cut", "tr", "diff", "md5sum", "sha256sum",
+            "echo", "printf", "test", "true", "false", ":");
+    // Префиксы, которые всегда снимаются перед классификацией (независимо от YAML)
+    private static final Set<String> BUILTIN_STRIP_PREFIXES = Set.of("sudo", "timeout", "nice");
     private static final Pattern LEADING_ASSIGNMENT = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*=");
 
     private final Path registryFile;
@@ -160,9 +163,11 @@ public class CommandRegistry {
     private String stripWrappers(String cmd) {
         var result = cmd;
         boolean stripped;
+        var allStripPrefixes = new java.util.ArrayList<>(registry.stripPrefixes());
+        BUILTIN_STRIP_PREFIXES.forEach(p -> { if (!allStripPrefixes.contains(p)) allStripPrefixes.add(p); });
         do {
             stripped = false;
-            for (var wrapper : registry.stripPrefixes()) {
+            for (var wrapper : allStripPrefixes) {
                 if (result.startsWith(wrapper + " ") || result.equals(wrapper)) {
                     result = result.substring(wrapper.length()).trim();
                     // timeout/nice take a numeric argument — strip it too
