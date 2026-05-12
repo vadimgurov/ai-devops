@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Первоначальная установка на сервере 192.168.86.38.
-# Запускать один раз: ssh vadim@192.168.86.38 'bash -s' < bin/server-setup.sh
+# Первоначальная установка на сервере.
+# Запускать один раз на целевом сервере:
+#   ssh user@host 'bash -s' < bin/server-setup.sh
 set -euo pipefail
 
-APP_DIR=/opt/ai-devops
-ENV_FILE=/etc/ai-devops.env
-REPO=git@github.com:vadimgurov/ai-devops.git
+APP_DIR=${APP_DIR:-/opt/ai-devops}
+ENV_FILE=${ENV_FILE:-/etc/ai-devops.env}
+APP_USER=${APP_USER:-$(whoami)}
+REPO=${REPO:?Укажи репозиторий: REPO=git@github.com:user/ai-devops.git bash bin/server-setup.sh}
 
 echo "==> Docker"
 if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com | sudo sh
-    sudo usermod -aG docker vadim
+    sudo usermod -aG docker "$APP_USER"
     echo "  Docker установлен. Перелогинься чтобы группа docker применилась, затем запусти скрипт снова."
     exit 0
 fi
@@ -19,7 +21,7 @@ docker --version
 echo "==> Клонируем репозиторий"
 if [ ! -d "$APP_DIR/.git" ]; then
     sudo git clone "$REPO" "$APP_DIR"
-    sudo chown -R vadim:vadim "$APP_DIR"
+    sudo chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 else
     echo "  Репозиторий уже есть, пропускаю"
 fi
@@ -45,5 +47,5 @@ fi
 echo ""
 echo "==> Готово. Дальше:"
 echo "  1. Заполни секреты: sudo nano $ENV_FILE"
-echo "  2. Убедись что SSH-ключ vadim@сервер имеет доступ к управляемым хостам"
-echo "  3. Задеплой: ./bin/deploy.sh с локальной машины"
+echo "  2. Убедись что SSH-ключ пользователя имеет доступ к управляемым хостам"
+echo "  3. Задеплой: SERVER=user@host ./bin/deploy.sh с локальной машины"
