@@ -73,11 +73,16 @@ public class InventoryTool {
         }
     }
 
-    @Tool(description = "Добавить или обновить телеметрическую проверку для хоста. Команда должна выводить одно число (например процент). threshold — при превышении открывается инцидент.")
-    public String saveTelemetryCheck(String hostId, String name, String command, double threshold) {
-        log.info("saveTelemetryCheck hostId={} name={} threshold={}", hostId, name, threshold);
+    @Tool(description = """
+            Добавить или обновить телеметрическую проверку для хоста.
+            Команда должна выводить одно число (например процент). threshold — при превышении открывается инцидент.
+            minDurationMs — минимальная длительность нарушения (в мс) перед открытием инцидента.
+            Например 300000 (5 минут) чтобы игнорировать кратковременные CPU-спайки. null — реагировать сразу.
+            """)
+    public String saveTelemetryCheck(String hostId, String name, String command, double threshold, Long minDurationMs) {
+        log.info("saveTelemetryCheck hostId={} name={} threshold={} minDurationMs={}", hostId, name, threshold, minDurationMs);
         try {
-            inventoryLoader.saveTelemetryCheck(hostId, new TelemetryCheck(name, command, threshold, null));
+            inventoryLoader.saveTelemetryCheck(hostId, new TelemetryCheck(name, command, threshold, minDurationMs));
             var result = "Телеметрия '%s' сохранена для хоста '%s'.".formatted(name, hostId);
             return result;
         } catch (Exception e) {
