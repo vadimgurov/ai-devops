@@ -7,10 +7,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -f "$SCRIPT_DIR/.env" ] && source "$SCRIPT_DIR/.env"
 
-APP_DIR=${APP_DIR:-/opt/ai-devops}
+APP_DIR=${APP_DIR:-$HOME/ai-devops}
 ENV_FILE=${ENV_FILE:-/etc/ai-devops.env}
 APP_USER=${APP_USER:-$(whoami)}
-REPO=git@github.com:vadimgurov/ai-devops.git
+REPO=https://github.com/vadimgurov/ai-devops.git
 
 echo "==> Docker"
 if ! command -v docker &> /dev/null; then
@@ -21,16 +21,19 @@ if ! command -v docker &> /dev/null; then
 fi
 docker --version
 
+echo "==> GitHub в known_hosts (нужен для git pull в будущем)"
+ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null
+
 echo "==> Клонируем репозиторий"
 if [ ! -d "$APP_DIR/.git" ]; then
-    sudo git clone "$REPO" "$APP_DIR"
-    sudo chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+    git clone "$REPO" "$APP_DIR"
 else
     echo "  Репозиторий уже есть, пропускаю"
 fi
 
 echo "==> Runtime-директории kb (не в репозитории)"
-mkdir -p "$APP_DIR/kb/incidents" "$APP_DIR/kb/conversations" "$APP_DIR/logs"
+mkdir -p "$APP_DIR/kb/hosts" "$APP_DIR/kb/incidents" "$APP_DIR/kb/conversations" \
+         "$APP_DIR/logs" "$APP_DIR/repos"
 
 echo "==> Env-файл (секреты)"
 if [ ! -f "$ENV_FILE" ]; then
