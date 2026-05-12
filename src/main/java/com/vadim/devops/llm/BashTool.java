@@ -65,6 +65,9 @@ public class BashTool {
                 command != null ? command.substring(0, Math.min(120, command.length())) : "null");
 
         if (command == null || command.isBlank()) return "Команда не указана.";
+        if (isGitSourceOp(command)) {
+            return "⛔ git clone/pull через bash запрещён. Используй инструмент updateSourceCode(serviceId).";
+        }
 
         var cmdPreview = command.length() > 80 ? command.substring(0, 80) + "…" : command;
         var hostLabel = (hostId == null || hostId.isBlank() || hostId.equalsIgnoreCase("null")) ? "local" : hostId;
@@ -135,6 +138,11 @@ public class BashTool {
                 };
             }
         };
+    }
+
+    private static boolean isGitSourceOp(String command) {
+        var stripped = command.stripLeading().replaceAll("^(sudo|timeout|nice)\\s+", "");
+        return stripped.matches("(?s)(git\\s+(clone|pull|fetch).*|mkdir.*&&.*git\\s+(clone|pull).*)");
     }
 
     private static String sshWrap(Host host, String command) {
