@@ -46,10 +46,8 @@ bin/
 ### Secrets ###
 secrets.properties
 
-### KB — hosts содержат IP и SSH-таргеты, не коммитить ###
-kb/hosts/
-kb/incidents/
-kb/conversations/
+### KB — runtime данные и конфиги хостов, не коммитить ###
+kb/
 
 ### Logs ###
 logs/
