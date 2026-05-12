@@ -34,7 +34,11 @@ public class InventoryTool {
             sb.append("Хост: ").append(h.id())
               .append(" name=").append(h.name())
               .append(" ssh=").append(h.sshTarget())
-              .append(" env=").append(h.env()).append("\n");
+              .append(" env=").append(h.env());
+            if (h.alertTypes() != null && !h.alertTypes().isEmpty()) {
+                sb.append(" alertTypes=").append(h.alertTypes());
+            }
+            sb.append("\n");
             if (h.services() != null) {
                 h.services().forEach(s -> {
                     sb.append("  сервис: ").append(s.id())
@@ -71,6 +75,29 @@ public class InventoryTool {
         } catch (IOException e) {
             return "Ошибка сохранения хоста: " + e.getMessage();
         }
+    }
+
+    @Tool(description = """
+            Задать фильтр типов алертов для хоста. Если список задан — агент реагирует ТОЛЬКО на эти типы аномалий.
+            Типы: SERVICE_DOWN, HEALTH_FAIL, METRIC_HIGH, EXCEPTION_BURST.
+            Пустой список или null — реагировать на всё (поведение по умолчанию).
+            Пример: ["EXCEPTION_BURST"] — только исключения в логах, игнорировать CPU/RAM/health.
+            """)
+    public String setHostAlertTypes(String hostId, List<String> alertTypes) {
+        log.info("setHostAlertTypes hostId={} alertTypes={}", hostId, alertTypes);
+        return inventoryLoader.findHost(hostId)
+                .map(host -> {
+                    try {
+                        inventoryLoader.saveHost(new Host(
+                                host.id(), host.name(), host.env(), host.ip(), host.sshTarget(),
+                                host.notes(), host.services(), host.telemetry(),
+                                (alertTypes == null || alertTypes.isEmpty()) ? null : alertTypes));
+                        return "alertTypes для хоста '%s' обновлён: %s".formatted(hostId, alertTypes);
+                    } catch (IOException e) {
+                        return "Ошибка: " + e.getMessage();
+                    }
+                })
+                .orElse("Хост '%s' не найден.".formatted(hostId));
     }
 
     @Tool(description = """
