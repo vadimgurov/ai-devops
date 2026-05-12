@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -f "$SCRIPT_DIR/.env" ] && source "$SCRIPT_DIR/.env"
 
 APP_DIR=${APP_DIR:-$HOME/ai-devops}
-ENV_FILE=${ENV_FILE:-/etc/ai-devops.env}
+ENV_FILE=${ENV_FILE:-$APP_DIR/.env}
 APP_USER=${APP_USER:-$(whoami)}
 REPO=https://github.com/vadimgurov/ai-devops.git
 
@@ -37,14 +37,14 @@ mkdir -p "$APP_DIR/kb/hosts" "$APP_DIR/kb/incidents" "$APP_DIR/kb/conversations"
 
 echo "==> Env-файл (секреты)"
 if [ ! -f "$ENV_FILE" ]; then
-    sudo tee "$ENV_FILE" > /dev/null << 'EOF'
+    tee "$ENV_FILE" > /dev/null << 'EOF'
 DEEPSEEK_API_KEY=
 TELEGRAM_TOKEN=
 TELEGRAM_CHAT_ID=
 TAVILY_API_KEY=
 KB_PATH=/app/kb
 EOF
-    sudo chmod 600 "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
     echo "  Создан $ENV_FILE — заполни секреты перед запуском"
 else
     echo "  $ENV_FILE уже существует, пропускаю"

@@ -48,6 +48,7 @@ bin/.env
 
 ### Secrets ###
 secrets.properties
+.env
 
 ### KB — runtime данные и конфиги хостов, не коммитить ###
 kb/
