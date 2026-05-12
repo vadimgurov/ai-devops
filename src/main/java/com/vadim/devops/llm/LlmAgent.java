@@ -28,10 +28,11 @@ public class LlmAgent {
 
     public LlmAgent(ChatClient.Builder chatClientBuilder,
                     KnowledgeBaseService kb, BashTool bashTool, InventoryTool inventoryTool,
-                    IncidentTool incidentTool, Optional<WebSearchTool> webSearchTool,
+                    IncidentTool incidentTool, SourceCodeTool sourceCodeTool,
+                    Optional<WebSearchTool> webSearchTool,
                     CompactLoggingAdvisor loggingAdvisor) {
         this.kb = kb;
-        var tools = new java.util.ArrayList<Object>(List.of(bashTool, inventoryTool, incidentTool));
+        var tools = new java.util.ArrayList<Object>(List.of(bashTool, inventoryTool, incidentTool, sourceCodeTool));
         webSearchTool.ifPresent(tools::add);
         this.chatClient = chatClientBuilder
                 .defaultTools(tools.toArray())
