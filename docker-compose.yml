@@ -7,3 +7,4 @@ services:
       - ./kb:/app/kb
       - ./logs:/app/logs
       - ./repos:/app/repos
+      - ~/.ssh:/root/.ssh:ro
