@@ -35,11 +35,17 @@ public class RepoManager {
         var localPath = reposDir.resolve(repoName).toAbsolutePath();
         if (Files.exists(localPath.resolve(".git"))) {
             log.info("git pull: {}", localPath);
-            bashService.execLocal("git -C %s pull --ff-only".formatted(localPath));
+            var result = bashService.execLocal("git -C %s pull --ff-only".formatted(localPath));
+            if (result.exitCode() != 0) {
+                throw new IOException("git pull failed (exit %d): %s".formatted(result.exitCode(), result.stderr()));
+            }
         } else {
             log.info("git clone {} → {}", repoUrl, localPath);
             Files.createDirectories(localPath.getParent());
-            bashService.execLocal("git clone %s %s".formatted(repoUrl, localPath));
+            var result = bashService.execLocal("git clone %s %s".formatted(repoUrl, localPath));
+            if (result.exitCode() != 0) {
+                throw new IOException("git clone failed (exit %d): %s".formatted(result.exitCode(), result.stderr()));
+            }
         }
         return localPath.toString();
     }

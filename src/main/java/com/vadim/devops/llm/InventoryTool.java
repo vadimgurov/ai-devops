@@ -77,14 +77,17 @@ public class InventoryTool {
         return result;
     }
 
-    @Tool(description = "Сохранить новый хост в инвентори. Вызывай после того как собрал всю информацию о хосте через SSH.")
+    @Tool(description = "Сохранить или обновить хост в инвентори. Upsert по id: обновляет только переданные поля (id, name, env, ip, sshTarget, notes), сохраняя существующие services, telemetry, alertTypes.")
     public String saveHost(String id, String name, String env, String ip, String sshTarget, String notes) {
         log.info("saveHost id={} name={} sshTarget={}", id, name, sshTarget);
         try {
-            var host = new Host(id, name, env, ip, sshTarget, notes, List.of(), List.of(), null);
+            var existing = inventoryLoader.findHost(id);
+            var host = new Host(id, name, env, ip, sshTarget, notes,
+                    existing.map(Host::services).orElse(List.of()),
+                    existing.map(Host::telemetry).orElse(List.of()),
+                    existing.map(Host::alertTypes).orElse(null));
             inventoryLoader.saveHost(host);
-            var result = "Хост '%s' сохранён в инвентори.".formatted(id);
-            return result;
+            return "Хост '%s' сохранён в инвентори.".formatted(id);
         } catch (IOException e) {
             return "Ошибка сохранения хоста: " + e.getMessage();
         }
