@@ -78,6 +78,7 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                     .commands(List.of(
                             new BotCommand("hosts", "Список хостов"),
                             new BotCommand("incidents", "Открытые инциденты"),
+                            new BotCommand("resolved", "Закрытые инциденты"),
                             new BotCommand("stop", "Остановить расследование"),
                             new BotCommand("clear", "Очистить историю сессии"),
                             new BotCommand("help", "Справка")))
@@ -135,12 +136,14 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
             }
             case "/hosts" -> sendHostList(chatId);
             case "/incidents" -> sendIncidentList(chatId);
+            case "/resolved" -> sendResolvedList(chatId);
             case "/help", "/start" -> sendReply(chatId, """
                     *DevOps Agent*
 
                     Команды:
                     /hosts — список хостов
                     /incidents — открытые инциденты
+                    /resolved — закрытые инциденты
                     /clear — очистить историю сессии
 
                     Или просто задай вопрос текстом.
@@ -218,6 +221,33 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         sendWithKeyboard(chatId, sb.toString(), rows);
     }
 
+    private static final int RESOLVED_PAGE_SIZE = 20;
+
+    private void sendResolvedList(String chatId) {
+        var resolved = kb.findResolvedIncidents();
+        if (resolved.isEmpty()) {
+            sendReply(chatId, "Закрытых инцидентов нет.");
+            return;
+        }
+        var page = resolved.size() > RESOLVED_PAGE_SIZE ? resolved.subList(0, RESOLVED_PAGE_SIZE) : resolved;
+        var sb = new StringBuilder("✅ <b>Закрытые инциденты</b> (последние " + page.size() + "):\n\n");
+        var rows = new ArrayList<InlineKeyboardRow>();
+        for (var inc : page) {
+            var recurrences = inc.events() == null ? 0L
+                    : inc.events().stream().filter(e -> "recurrence".equals(e.eventType())).count();
+            sb.append("✅ <code>").append(inc.id()).append("</code>")
+              .append(" — <code>").append(inc.hostId()).append("</code>")
+              .append(inc.serviceId() != null ? "/<code>" + inc.serviceId() + "</code>" : "")
+              .append("\n").append(inc.summary());
+            if (recurrences > 0) sb.append(" <i>(повторился ×").append(recurrences).append(")</i>");
+            sb.append("\n\n");
+            rows.add(new InlineKeyboardRow(btn("📋 " + inc.id(), "view_incident:" + inc.id())));
+        }
+        if (resolved.size() > RESOLVED_PAGE_SIZE)
+            sb.append("_(и ещё ").append(resolved.size() - RESOLVED_PAGE_SIZE).append(" инцидентов)_");
+        sendWithKeyboard(chatId, sb.toString(), rows);
+    }
+
     private void handleCallback(Update update) {
         var query = update.getCallbackQuery();
         var data = query.getData();
@@ -282,6 +312,27 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                         .map(incident -> "⚠️ Не удалось закрыть инцидент: " + IncidentFormatter.htmlRef(incident))
                         .orElse("⚠️ Не удалось закрыть инцидент: <code>" + incidentId + "</code>"));
             }
+
+        } else if (data.startsWith("view_incident:")) {
+            var incidentId = data.substring(14);
+            answerCallback(callbackId, null);
+            sendReply(chatId, incidentManager.loadIncident(incidentId)
+                    .map(i -> {
+                        var sb = new StringBuilder();
+                        sb.append("✅ <b>").append(IncidentFormatter.escapeHtml(i.id())).append("</b>\n");
+                        sb.append("Хост: <code>").append(i.hostId()).append("</code>");
+                        if (i.serviceId() != null) sb.append(" / <code>").append(i.serviceId()).append("</code>");
+                        sb.append("\n").append(IncidentFormatter.escapeHtml(i.summary())).append("\n");
+                        if (i.rootCauseHypothesis() != null)
+                            sb.append("\n<b>Причина:</b> ").append(IncidentFormatter.escapeHtml(i.rootCauseHypothesis()));
+                        if (i.events() != null) {
+                            var recurrences = i.events().stream().filter(e -> "recurrence".equals(e.eventType())).toList();
+                            if (!recurrences.isEmpty())
+                                sb.append("\n<b>Повторился:</b> ×").append(recurrences.size());
+                        }
+                        return sb.toString();
+                    })
+                    .orElse("Инцидент не найден: <code>" + incidentId + "</code>"));
 
         } else {
             // Approval callbacks

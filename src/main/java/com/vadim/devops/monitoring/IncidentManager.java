@@ -26,6 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.regex.Pattern;
 
 @Service
 public class IncidentManager {
@@ -82,7 +83,42 @@ public class IncidentManager {
         if (alertTypes != null && !alertTypes.isEmpty() && !alertTypes.contains(anomaly.type().name())) return;
 
         switch (anomaly.type()) {
-            case HEALTH_FAIL, METRIC_HIGH, EXCEPTION_BURST -> {
+            case EXCEPTION_BURST -> {
+                if (hasOpenIncident(anomaly.hostId(), anomaly.serviceId())) return;
+                // Check if this is a recurrence of a previously investigated exception
+                var exceptionClass = extractExceptionClass(anomaly.details());
+                var prev = exceptionClass != null
+                        ? kb.findSimilarIncidents(anomaly.serviceId(), exceptionClass).stream()
+                                .filter(i -> anomaly.hostId().equals(i.hostId()))
+                                .max(Comparator.comparing(Incident::startedAt))
+                                .orElse(null)
+                        : null;
+                if (prev != null) {
+                    var recurred = prev
+                            .withStatus(Incident.Status.OPEN)
+                            .addEvent(new IncidentEvent(Instant.now(), "recurrence",
+                                    Map.of("details", anomaly.details())));
+                    kb.saveIncident(recurred);
+                    log.warn("Повтор инцидента {}: {}", prev.id(), exceptionClass);
+                    telegram.ifPresent(t -> t.sendMessage(
+                            "🔁 <b>Повтор</b> " + IncidentFormatter.htmlRef(recurred)
+                            + "\n" + IncidentFormatter.escapeHtml(anomaly.details())
+                            + "\n\nИнцидент уже расследовался. Нажми /incidents чтобы расследовать снова."));
+                    return;
+                }
+                // New exception — create incident and investigate
+                var incident = new Incident(
+                        "inc-" + System.currentTimeMillis(),
+                        anomaly.hostId(), anomaly.serviceId(),
+                        Incident.Status.OPEN, Incident.Severity.HIGH,
+                        Instant.now(), null,
+                        anomaly.details(), null, null, null);
+                kb.saveIncident(incident);
+                log.warn("Инцидент открыт [OPEN]: {} — {}", incident.id(), incident.summary());
+                telegram.ifPresent(t -> t.sendIncidentAlert(incident));
+                tryPickUpWork();
+            }
+            case HEALTH_FAIL, METRIC_HIGH -> {
                 if (hasOpenIncident(anomaly.hostId(), anomaly.serviceId())) return;
                 var isCpuMetric = anomaly.type() == Anomaly.Type.METRIC_HIGH
                         && "cpu".equalsIgnoreCase(anomaly.serviceId());
@@ -388,6 +424,15 @@ public class IncidentManager {
                 7. resolveIncident — ОБЯЗАТЕЛЬНО в конце: закрой инцидент с итоговым выводом (даже если метрика уже восстановилась)
                 """.formatted(incident.id(), incident.summary(), incident.hostId(), incident.serviceId(),
                 profilingSection, incident.serviceId(), incident.serviceId(), incident.serviceId());
+    }
+
+    private static final Pattern EXCEPTION_CLASS_PATTERN =
+            Pattern.compile("[A-Za-z][A-Za-z0-9.]*(?:Exception|Error|Panic|Traceback)");
+
+    static String extractExceptionClass(String details) {
+        if (details == null) return null;
+        var m = EXCEPTION_CLASS_PATTERN.matcher(details);
+        return m.find() ? m.group() : null;
     }
 
     private static boolean isCausedByInterrupt(Throwable e) {

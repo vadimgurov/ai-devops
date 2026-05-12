@@ -50,6 +50,22 @@ public class KnowledgeBaseService {
                 .toList();
     }
 
+    /** Найти последний закрытый инцидент для данного хоста+сервиса (для определения повтора). */
+    public Optional<Incident> findLastResolvedIncident(String hostId, String serviceId) {
+        return findAll("incidents", "incident.json", Incident.class).stream()
+                .filter(i -> i.status() == Incident.Status.RESOLVED)
+                .filter(i -> hostId.equals(i.hostId()) && serviceId.equals(i.serviceId()))
+                .max(java.util.Comparator.comparing(Incident::startedAt));
+    }
+
+    /** Закрытые инциденты, отсортированные от новых к старым. */
+    public List<Incident> findResolvedIncidents() {
+        return findAll("incidents", "incident.json", Incident.class).stream()
+                .filter(i -> i.status() == Incident.Status.RESOLVED)
+                .sorted(java.util.Comparator.comparing(Incident::startedAt).reversed())
+                .toList();
+    }
+
     private static boolean matchesAnyTerm(Incident i, String[] terms) {
         if (terms.length == 0) return true;
         var text = ((i.summary() != null ? i.summary() : "") + " " +
