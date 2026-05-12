@@ -324,7 +324,7 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                         if (i.serviceId() != null) sb.append(" / <code>").append(i.serviceId()).append("</code>");
                         sb.append("\n").append(IncidentFormatter.escapeHtml(i.summary())).append("\n");
                         if (i.rootCauseHypothesis() != null)
-                            sb.append("\n<b>Причина:</b> ").append(IncidentFormatter.escapeHtml(i.rootCauseHypothesis()));
+                            sb.append("\n<b>Причина:</b>\n").append(TelegramMarkdownConverter.convert(i.rootCauseHypothesis()));
                         if (i.events() != null) {
                             var recurrences = i.events().stream().filter(e -> "recurrence".equals(e.eventType())).toList();
                             if (!recurrences.isEmpty())
