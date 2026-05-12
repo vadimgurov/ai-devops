@@ -119,7 +119,8 @@ public class InventoryLoader {
         var host = hosts.get(hostId);
         if (host == null) throw new IllegalArgumentException("Host not found: " + hostId);
         var telemetry = new ArrayList<>(host.telemetry() != null ? host.telemetry() : List.of());
-        telemetry.removeIf(t -> t.name().equals(check.name()));
+        // Remove by name OR by identical command — prevent duplicate checks for the same resource
+        telemetry.removeIf(t -> t.name().equals(check.name()) || t.command().equals(check.command()));
         telemetry.add(check);
         var updated = host.withTelemetry(telemetry);
         yaml.writeValue(hostsDir.resolve(hostId + ".yaml").toFile(), updated);
