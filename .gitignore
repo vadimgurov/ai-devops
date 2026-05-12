@@ -43,6 +43,9 @@ bin/
 ### Codex ###
 .codex
 
+### Local deploy config ###
+bin/.env
+
 ### Secrets ###
 secrets.properties
 

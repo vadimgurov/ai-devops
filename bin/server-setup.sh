@@ -4,6 +4,9 @@
 #   ssh user@host 'bash -s' < bin/server-setup.sh
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "$SCRIPT_DIR/.env" ] && source "$SCRIPT_DIR/.env"
+
 APP_DIR=${APP_DIR:-/opt/ai-devops}
 ENV_FILE=${ENV_FILE:-/etc/ai-devops.env}
 APP_USER=${APP_USER:-$(whoami)}
