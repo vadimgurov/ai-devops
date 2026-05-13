@@ -1,217 +1,153 @@
-# DevOps Agent MVP
+# DevOps Agent — спецификация
 
 ## 1. Цель
 
-Минимальная система, которая:
-- мониторит Linux-хосты с сервисами (Java/Python/Go) и БД (PostgreSQL/MySQL/MongoDB)
+Автономный агент, который:
+- мониторит Linux-хосты с сервисами (Java/Python/Docker) и БД (MySQL/PostgreSQL)
 - ходит на хосты по SSH — без агента на хосте
-- при проблемах расследует и предлагает action
-- запрашивает approval через Telegram
-- после approval выполняет whitelisted действия по SSH
-- хранит историю инцидентов и изменений в файлах на диске
+- при аномалиях расследует причину через LLM и предлагает действие
+- запрашивает подтверждение write-действий через Telegram
+- после подтверждения выполняет команду по SSH
+- хранит историю инцидентов и переписку с LLM в файлах на диске
 
 ---
 
 ## 2. Принципы
 
-- **Central Agent** — единственный сервис, реализован на Java + Spring Boot + Spring AI
-- **SSH** — единственный транспорт к хосту
+- **Central Agent** — единственный сервис, Java 21 + Spring Boot 3.4 + Spring AI
+- **SSH** — единственный транспорт к хосту (ProcessBuilder + `ssh`)
 - **Файлы на диске** — хранилище (JSON/YAML), без БД
-- **Telegram Bot** — approval
-- **LLM** работает только через typed tools, не через свободный shell
+- **Telegram Bot** — интерфейс оператора и approval flow
+- **LLM** работает через typed tools (Spring AI tool calling)
 
 ---
 
 ## 3. Компоненты
 
-### Central Agent (Spring Boot)
-- inventory хостов и сервисов
-- scheduling polling loop
-- SSH execution (read-only и whitelisted write)
-- LLM-интеграция через Spring AI
-- Telegram approval flow
-- запись/чтение knowledge base из файлов
+### Мониторинг
+- **MonitoringScheduler** — два цикла: дешёвые проверки (по умолчанию 20 сек) и медленные (60 сек)
+- **AnomalyDetector** — сравнивает значения телеметрии с порогами, отслеживает восстановление; поддерживает `minDurationMs` — алерт только если аномалия длится дольше порога
+- **ExceptionScanner** — ищет исключения в логах сервисов (journald/docker); дедуплицирует по fingerprint (первая строка, 120 символов); повторные исключения того же класса тихо добавляются к уже закрытому инциденту без перерасследования
+
+### LLM-агент (`LlmAgent`)
+ChatClient с системным промптом и набором инструментов. Одно расследование одновременно (single-thread pool). История диалога хранится в KB и подрезается до последних 20 сообщений.
+
+**Инструменты:**
+
+| Инструмент | Назначение |
+|---|---|
+| `bash(hostId, command)` | SSH на хост или локальная команда; классифицирует команду перед выполнением |
+| `getInventory()` | Список хостов, сервисов, телеметрии |
+| `saveHost / saveService` | Upsert хоста/сервиса (сохраняет telemetry/alertTypes при обновлении базовых полей) |
+| `saveTelemetryCheck` | Upsert телеметрии по name+command (дедупликация) |
+| `setHostAlertTypes` | Фильтр типов аномалий для хоста |
+| `searchSimilarIncidents` | Похожие закрытые инциденты по ключевым словам |
+| `getIncident` | Полная история инцидента (события, гипотеза) |
+| `updateIncidentHypothesis` | Сохранить гипотезу о причине |
+| `resolveIncident` | Закрыть инцидент с итоговым выводом |
+| `updateSourceCode(serviceId)` | git clone/pull репозитория сервиса локально; возвращает путь |
+| `search(query)` | Поиск в интернете через Tavily API (опционально) |
+
+**Классификация команд (`CommandRegistry`):**
+- `READ_ONLY` — выполняются без вопросов (journalctl, cat, ls, ps, df, find, echo и др. — часть захардкожена, часть из YAML)
+- `WRITE_ACTION` — требуют подтверждения оператора
+- `UNKNOWN` — требуют подтверждения, оператор может нажать «разрешить всегда» (сохраняется в YAML)
+- `git clone/pull` через bash всегда отклоняется — нужно использовать `updateSourceCode`
 
 ### Telegram Bot
-- показать summary инцидента + proposed action
-- кнопки: Approve / Deny / More diagnostics
-- вернуть решение агенту
-- принимать вопросы от оператора в свободной форме: "что с процессами на prod-1?", "проверь disk на billing-api", "почему упал сервис?" — агент отвечает через LLM + SSH
+Команды оператора:
+
+| Команда | Действие |
+|---|---|
+| `/hosts` | Список хостов со статусами сервисов, телеметрией и alertTypes |
+| `/incidents` | Открытые инциденты с кнопками управления |
+| `/resolved` | Последние 20 закрытых инцидентов с количеством повторений |
+| `/ask <текст>` | Свободный вопрос агенту (с историей диалога) |
+| `/stop` | Остановить текущее расследование |
+| `/clear` | Очистить историю диалога |
+
+Approval flow: агент присылает описание команды с кнопками **Разрешить / Разрешить всегда / Отклонить**. Таймаут ожидания — 5 минут.
 
 ### Knowledge Base (файлы на диске)
+
 ```
 kb/
-  hosts/          # inventory хостов и сервисов
-  snapshots/      # последние состояния хостов
-  incidents/      # один файл = один инцидент
-  changes/        # история выполненных команд
-  patterns/       # known patterns + successful remediations
+  allowed_commands.yaml          # whitelist команд (read-only / write-action)
+  hosts/
+    <id>.yaml                    # конфиг хоста: ip, sshTarget, telemetry, alertTypes
+    <id>/services/<svc>.yaml     # конфиг сервиса: runtime, systemdUnit, logsCommand, repoUrl, ...
+  incidents/
+    <id>/incident.json           # инцидент: статус, гипотеза, события
+    <id>/conversation.json       # история диалога LLM для инцидента
+  conversations/
+    session-<date>.json          # история свободных диалогов /ask (по дате)
 ```
 
 ---
 
-## 4. LLM Tools
+## 4. Модель данных
 
-LLM имеет ровно два инструмента.
+### Host (`hosts/<id>.yaml`)
+`id, name, env, ip, sshTarget, notes, telemetry[], alertTypes[]`
 
-### `ssh_exec`
-- read-only команды — без approval
-- write-actions — только после approval оператора
-- аргументы строго типизированы, свободный shell запрещён
-- используется для мониторинга, расследования, remediation и ответов на вопросы оператора
+### ServiceConfig (`hosts/<id>/services/<svc>.yaml`)
+`id, name, hostId, runtime, systemdUnit, containerName, healthCheck, versionUrl, sourcesPath, repoUrl, logsCommand, configFiles[], allowedActions[]`
 
-### `telegram_send`
-- отправить сообщение оператору: summary инцидента, ответ на вопрос, запрос approval
-- approval flow: `request_approval(incident_id, proposal)` + кнопки Approve/Deny/More diagnostics
+### TelemetryCheck
+`name, command, threshold, minDurationMs`
 
-KB читается и пишется напрямую агентом (не через LLM tool).
+### Incident (`incidents/<id>/incident.json`)
+`id, hostId, serviceId, status, severity, startedAt, resolvedAt, summary, rootCauseHypothesis, confidence, events[]`
 
----
+**Статусы:** `OPEN → INVESTIGATING → RESOLVED` (или `OPEN → PROFILING → OPEN → INVESTIGATING → RESOLVED`)
 
-## 5. Что снимается по SSH
-
-| Категория | Что |
-|-----------|-----|
-| Health | curl health URL или port check |
-| Systemd | unit status, restart count, PID, uptime |
-| Logs | journald tail, grep по паттерну |
-| Host state | CPU, memory, disk, top processes |
-| Config | cat config files |
-| DB | ping / select 1 |
-| Security | ssh auth failures, новые listeners |
+**Типы событий:** `recurrence, hypothesis_updated, resolved, duplicate_closed, metric_recovered, profiling_complete`
 
 ---
 
-## 6. Write-actions (whitelist)
+## 5. Типы аномалий
 
-Только эти, только после approval:
-- `restart_service`
-- `reload_service`
-- `stop_service` / `start_service`
-- `rotate_logs`
-- `cleanup_tmp`
-- `run_rollback_script`
+| Тип | Что детектит | Поведение |
+|---|---|---|
+| `HEALTH_FAIL` | healthCheck вернул ненулевой exit | Создаёт инцидент HIGH, запускает расследование |
+| `METRIC_HIGH` | телеметрия превысила порог дольше minDurationMs | Создаёт инцидент MEDIUM; для CPU запускает профайлинг |
+| `EXCEPTION_BURST` | N исключений в логах за интервал | Создаёт инцидент HIGH; повтор того же класса исключений — тихо добавляет событие к закрытому инциденту |
+| `SERVICE_DOWN` | healthCheck недоступен | Создаёт инцидент HIGH |
+| `*_RECOVERED` | метрика/сервис восстановились | Закрывает инцидент если расследование ещё не началось |
 
----
-
-## 7. Monitoring loop
-
-**Каждые 15–30 сек:** health check, systemd active/failed, process alive
-
-**Каждые 1–5 мин:** логи, CPU/memory/disk, security summary, DB ping
-
-**По инциденту:** расширенные логи, конфиги, Git lookup, web search
-
-### Базовый цикл
-1. Взять host из inventory
-2. Выполнить cheap checks по SSH
-3. Сравнить с предыдущим snapshot
-4. Нет проблем → сохранить snapshot
-5. Есть аномалия → создать/обновить инцидент → запустить investigation
+Фильтр `alertTypes` на хосте ограничивает, на какие типы агент реагирует.
 
 ---
 
-## 8. Investigation loop
+## 6. Профайлинг (CPU)
 
-1. Прочитать host/service profile из KB
-2. Найти похожие инциденты
-3. Снять дополнительные данные по SSH
-4. Если stacktrace — код из Git
-5. Сформировать гипотезу + confidence
-6. Решить: зафиксировать / more diagnostics / запросить approval на action
+При `METRIC_HIGH` для CPU-метрики инцидент переводится в статус `PROFILING` и запускается `ProfilingService`:
+- определяет runtime процесса (`/proc/<pid>/cmdline`)
+- Java → `asprof` (async-profiler), Python → `py-spy`
+- результат сохраняется в событие `profiling_complete` и передаётся LLM при расследовании
 
 ---
 
-## 9. Approval (Telegram)
+## 7. Стек
 
-Сообщение содержит: host, service, severity, что сломалось, гипотезу, proposed action, риск.
-
-Кнопки: **Approve** / **Deny** / **More diagnostics**
-
-Approval привязан к инциденту, логируется кто и когда апрувнул.
-
----
-
-## 10. Модель данных (файлы)
-
-### hosts/{id}.yaml
-`id, name, env, ip, ssh_target, notes`
-
-### hosts/{id}/services/{service_id}.yaml
-`id, name, runtime, systemd_unit, health_url, repo_url, config_files, allowed_actions`
-
-### snapshots/{host_id}/latest.json
-`ts, cpu, memory, disk, top_processes, service_statuses`
-
-### incidents/{id}.json
-`id, host_id, service_id, status, severity, started_at, resolved_at, summary, root_cause_hypothesis, confidence, events[]`
-
-### changes/{id}.json
-`id, host_id, service_id, ts, command, args, result, approval_id, approved_by`
-
-### patterns/{id}.json
-`id, host_id?, service_id?, pattern_type, summary, remediation_hint, success_rate`
+- **Java 21 + Spring Boot 3.4** (non-web приложение)
+- **Spring AI** — ChatClient, tool calling, CompactLoggingAdvisor
+- **Spring Scheduler** — `@Scheduled` для циклов мониторинга
+- **ProcessBuilder** — SSH и локальные команды (не Jsch)
+- **Jackson** — JSON/YAML сериализация
+- **TelegramBots** — Telegram Bot API
+- **Docker + BuildKit** — сборка и деплой; Gradle-кеш через `--mount=type=cache`
 
 ---
 
-## 11. Inventory entry
+## 8. Деплой
 
-```yaml
-service: billing-api
-host: prod-1
-ssh_target: ubuntu@prod-1
-runtime: java
-systemd_unit: billing-api.service
-health_url: http://127.0.0.1:8080/actuator/health
-repo_url: git@github.com:org/billing.git
-config_files:
-  - /opt/billing/config/application-prod.yml
-allowed_actions:
-  - restart_service
-  - reload_service
+```bash
+# Пересборка и запуск на удалённом сервере
+./bin/deploy.sh          # читает SERVER и APP_DIR из bin/.env
+
+# Прямой запуск
+DOCKER_BUILDKIT=1 docker compose up -d --build
 ```
 
----
-
-## 12. Стек
-
-- **Java 21 + Spring Boot 3**
-- **Spring AI** — LLM integration + tool calling
-- **Spring Scheduler** — polling loop
-- **Jsch / Apache MINA SSHD** — SSH client
-- **TelegramBots** — Telegram bot
-
----
-
-## 13. Порядок разработки
-
-**Этап 1**
-- inventory (YAML файлы)
-- SSH client + read-only templates
-- polling loop + snapshots
-- incident creation
-- Telegram approval
-- 2-3 write-actions
-- KB запись/чтение
-
-**Этап 2**
-- LLM investigation через Spring AI tools
-- Git integration + code-aware RCA
-- similar incident retrieval из KB
-- patterns + successful remediations
-
-**Этап 3**
-- performance profiling (JFR, pprof)
-- weekly optimization proposals
-
----
-
-## 14. Критерии готовности MVP
-
-1. Регулярно ходит по SSH на хост
-2. Обнаруживает падение сервиса, burst исключений, disk/memory/CPU pressure
-3. Создаёт инцидент и собирает факты
-4. Показывает summary в Telegram
-5. После approval перезапускает сервис
-6. Записывает инцидент и изменение в KB
-7. На следующем похожем инциденте подтягивает историю и успешные remediation
+SSH-ключи монтируются из `~/.ssh` хоста. Entrypoint-скрипт копирует их в `/root/.ssh` с правильными правами (OpenSSH игнорирует `$HOME`, читает UID из `/etc/passwd`). Ключ Bitbucket добавляется в `known_hosts` при каждом старте.
