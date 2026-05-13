@@ -10,6 +10,8 @@ if [ -d /root/.ssh-src ] && [ "$(ls -A /root/.ssh-src)" ]; then
     chmod 700 /run/.ssh
     find /run/.ssh -type f -not -name "*.pub" -exec chmod 600 {} \;
     find /run/.ssh -name "*.pub" -exec chmod 644 {} \;
+    # Ensure Bitbucket host key is trusted (port 443 via altssh.bitbucket.org)
+    ssh-keyscan -p 443 altssh.bitbucket.org >> /run/.ssh/known_hosts 2>/dev/null
     export HOME=/run
 fi
 
