@@ -115,8 +115,7 @@ public class LlmAgent {
             - Если оператор явно говорит тебе сохранить что-то в инвентори — сохраняй сразу через saveHost/saveService
             - sourcesPath — путь к исходникам на ЛОКАЛЬНОЙ машине агента. Для поиска по sourcesPath вызывай bash с hostId=null
             - Никогда не ищи исходники (.java, .py, .ts) через SSH на удалённом сервере
-            - async-profiler (команда asprof) уже установлен на хостах — НЕ пытайся его скачивать или устанавливать. Используй напрямую: asprof -d 15 -e cpu -o collapsed <pid>
-            - asprof работает ТОЛЬКО для Java процессов (JVM). Для Python используй py-spy (py-spy top --pid <pid> --duration 15). Перед профайлингом сначала определи runtime процесса через ps aux или /proc/<pid>/cmdline
+            - Профайлинг CPU (asprof, py-spy) запускается АВТОМАТИЧЕСКИ до начала расследования — никогда не запускай их через bash самостоятельно. Результаты или причина неудачи будут переданы тебе в тексте задачи
 
             Работа с инцидентами:
             - При расследовании сначала вызови searchSimilarIncidents — возможно эта проблема уже решалась
@@ -134,9 +133,7 @@ public class LlmAgent {
 
             Инциденты нехватки ресурсов (высокий CPU, RAM, диск):
             - СНАЧАЛА определи какой процесс потребляет ресурс: ps aux --sort=-%cpu | head -10
-            - Определи runtime процесса (/proc/<pid>/cmdline или ps aux): java → asprof, python → py-spy, go → pprof
-            - Для Java: asprof -d 15 -e cpu -o collapsed <pid>, jstack <pid>, jmap -histo <pid>
-            - Для Python: py-spy top --pid <pid> --duration 15 --nonblocking
+            - Для Java: jstack <pid>, jmap -histo <pid> для диагностики потоков и памяти
             - Для БД: посмотри slow query log, активные запросы (SHOW PROCESSLIST, pg_stat_activity), индексы
             - Изучи исходный код сервиса (sourcesPath в инвентори) — найди причину в коде: утечки памяти, N+1 запросы, отсутствующие индексы, неоптимальные алгоритмы, бесконечные циклы
             - Сформулируй конкретные предложения по изменению кода: какой класс/метод переписать, какой индекс добавить, где кэшировать

@@ -399,8 +399,18 @@ public class IncidentManager {
                 .map(Object::toString)
                 .orElse(null);
 
+        var profilingSkipReason = incident.events() == null ? null : incident.events().stream()
+                .filter(e -> "profiling_skipped".equals(e.eventType()))
+                .findFirst()
+                .map(e -> e.payload().get("reason"))
+                .map(Object::toString)
+                .orElse(null);
+
         var profilingSection = profilingData != null
                 ? "\n\nДанные профайлинга CPU (уже собраны, не запускай профайлер повторно):\n" + profilingData + "\n"
+                : profilingSkipReason != null
+                ? "\n\nПрофайлинг CPU был запущен автоматически, но не удался: " + profilingSkipReason
+                        + ". Не пытайся запустить asprof или py-spy повторно — используй jstack, jmap, ps aux, /proc для диагностики.\n"
                 : "";
 
         return """
