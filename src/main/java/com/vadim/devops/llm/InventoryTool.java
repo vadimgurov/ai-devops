@@ -142,17 +142,21 @@ public class InventoryTool {
             Сохранить сервис для хоста в инвентори. Вызывай после того как выяснил детали сервиса через SSH.
             repoUrl — git-репозиторий с исходниками (например git@github.com:user/repo.git), null если неизвестен.
             healthCheck — shell-команда для проверки живости (exit 0 = жив), например: curl -fsS --max-time 5 http://localhost:8080/actuator/health > /dev/null
+            healthCheckMinDurationMs — минимальное время непрерывного падения healthCheck (мс) перед открытием инцидента.
+              Защищает от ложных алертов при редеплое. Например 120000 = 2 минуты. null = реагировать немедленно.
             logsCommand — shell-команда для чтения логов, например:
               systemd: journalctl -u crm.service -n 200 --no-pager
               docker:  docker logs bin-kb --tail 200
             """)
     public String saveService(String hostId, String id, String name, String runtime,
-                              String systemdUnit, String healthCheck, String repoUrl,
-                              String logsCommand, List<String> configFiles, List<String> allowedActions) {
+                              String systemdUnit, String healthCheck, Long healthCheckMinDurationMs,
+                              String repoUrl, String logsCommand,
+                              List<String> configFiles, List<String> allowedActions) {
         log.info("saveService hostId={} id={} unit={}", hostId, id, systemdUnit);
         try {
             var service = new ServiceConfig(id, name, hostId, runtime, systemdUnit,
-                    null, healthCheck, null, null, repoUrl, logsCommand, null, configFiles, allowedActions);
+                    null, healthCheck, null, null, repoUrl, logsCommand,
+                    healthCheckMinDurationMs, configFiles, allowedActions);
             inventoryLoader.saveService(hostId, service);
             return "Сервис '%s' сохранён для хоста '%s'.".formatted(id, hostId);
         } catch (IOException e) {

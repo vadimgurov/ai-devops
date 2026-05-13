@@ -410,7 +410,12 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         sb.append(" (").append(s.runtime()).append(")\n");
         if (s.systemdUnit() != null) sb.append("Unit: <code>").append(s.systemdUnit()).append("</code>\n");
         if (s.containerName() != null) sb.append("Container: <code>").append(s.containerName()).append("</code>\n");
-        if (s.healthCheck() != null) sb.append("Health: <code>").append(s.healthCheck()).append("</code>\n");
+        if (s.healthCheck() != null) {
+            sb.append("Health: <code>").append(s.healthCheck()).append("</code>");
+            if (s.healthCheckMinDurationMs() != null)
+                sb.append(" (grace ").append(s.healthCheckMinDurationMs() / 1000).append("s)");
+            sb.append("\n");
+        }
         if (s.logsCommand() != null) sb.append("Logs: <code>").append(s.logsCommand()).append("</code>\n");
         if (s.versionUrl() != null) sb.append("VersionUrl: <code>").append(s.versionUrl()).append("</code>\n");
         if (s.repoUrl() != null) sb.append("Repo: <code>").append(s.repoUrl()).append("</code>\n");
