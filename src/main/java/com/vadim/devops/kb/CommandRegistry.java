@@ -36,7 +36,7 @@ public class CommandRegistry {
     private static final Set<String> BUILTIN_READ_ONLY_BASES = Set.of(
             "journalctl", "cat", "ls", "find", "grep", "ps", "df", "free", "top", "htop",
             "tail", "head", "less", "more", "stat", "file", "which", "whoami", "hostname",
-            "uname", "uptime", "date", "id", "env", "printenv", "netstat", "ss", "ip",
+            "uname", "uptime", "date", "id", "netstat", "ss", "ip",
             "ping", "traceroute", "nslookup", "dig", "curl", "wget", "lsof", "du",
             "wc", "sort", "uniq", "awk", "cut", "tr", "diff", "md5sum", "sha256sum",
             "echo", "printf", "test", "true", "false", ":");

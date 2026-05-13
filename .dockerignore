@@ -1,0 +1,16 @@
+.git
+.gradle
+build/
+out/
+.idea/
+.vscode/
+
+# Secrets — never send to Docker daemon
+secrets.properties
+.env
+bin/.env
+
+# Runtime data — not needed for build
+kb/
+logs/
+repos/
