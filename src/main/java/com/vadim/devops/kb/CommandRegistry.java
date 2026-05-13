@@ -39,6 +39,7 @@ public class CommandRegistry {
             "uname", "uptime", "date", "id", "netstat", "ss", "ip",
             "ping", "traceroute", "nslookup", "dig", "curl", "wget", "lsof", "du",
             "wc", "sort", "uniq", "awk", "cut", "tr", "diff", "md5sum", "sha256sum",
+            "xargs", "tee", "read", "basename", "dirname", "realpath",
             "echo", "printf", "test", "true", "false", ":");
     // Префиксы, которые всегда снимаются перед классификацией (независимо от YAML)
     private static final Set<String> BUILTIN_STRIP_PREFIXES = Set.of("sudo", "timeout", "nice");
