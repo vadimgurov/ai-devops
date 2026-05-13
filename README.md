@@ -64,10 +64,12 @@ Spring Boot (non-web) + Spring AI
 ```env
 DEEPSEEK_API_KEY=sk-...
 TELEGRAM_TOKEN=123456:ABC...
-TELEGRAM_CHAT_ID=<твой chat id>
-TAVILY_API_KEY=tvly-...          # опционально, для поиска в интернете
+TELEGRAM_CHAT_ID=<chat id оператора>   # узнать: написать @userinfobot в Telegram
+TAVILY_API_KEY=tvly-...                # опционально, для поиска в интернете
 KB_PATH=/app/kb
 ```
+
+`TELEGRAM_CHAT_ID` — это числовой ID аккаунта оператора, а не имя чата. Агент будет отправлять уведомления и запрашивать подтверждения именно этому пользователю. Сообщения от других пользователей игнорируются.
 
 ### 2. SSH-ключи
 
