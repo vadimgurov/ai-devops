@@ -55,9 +55,6 @@ public class InventoryTool {
                     if (s.configFiles() != null && !s.configFiles().isEmpty()) {
                         sb.append(" configFiles=").append(s.configFiles());
                     }
-                    if (s.allowedActions() != null && !s.allowedActions().isEmpty()) {
-                        sb.append(" allowedActions=").append(s.allowedActions());
-                    }
                     sb.append("\n");
                 });
             }
@@ -151,12 +148,12 @@ public class InventoryTool {
     public String saveService(String hostId, String id, String name, String runtime,
                               String systemdUnit, String healthCheck, Long healthCheckMinDurationMs,
                               String repoUrl, String logsCommand,
-                              List<String> configFiles, List<String> allowedActions) {
+                              List<String> configFiles) {
         log.info("saveService hostId={} id={} unit={}", hostId, id, systemdUnit);
         try {
             var service = new ServiceConfig(id, name, hostId, runtime, systemdUnit,
                     null, healthCheck, null, null, repoUrl, logsCommand,
-                    healthCheckMinDurationMs, configFiles, allowedActions);
+                    healthCheckMinDurationMs, configFiles);
             inventoryLoader.saveService(hostId, service);
             return "Сервис '%s' сохранён для хоста '%s'.".formatted(id, hostId);
         } catch (IOException e) {

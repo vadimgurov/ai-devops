@@ -18,6 +18,5 @@ public record ServiceConfig(
         String repoUrl,
         String logsCommand,     // shell command to read logs, e.g. journalctl -u crm.service -n 200
         Long healthCheckMinDurationMs, // min consecutive failure duration before incident (grace period for redeploys)
-        List<String> configFiles,
-        List<String> allowedActions
+        List<String> configFiles
 ) {}

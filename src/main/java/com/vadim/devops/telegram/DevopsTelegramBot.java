@@ -422,8 +422,6 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         if (s.sourcesPath() != null) sb.append("Sources: <code>").append(s.sourcesPath()).append("</code>\n");
         if (s.configFiles() != null && !s.configFiles().isEmpty())
             sb.append("Configs: ").append(String.join(", ", s.configFiles())).append("\n");
-        if (s.allowedActions() != null && !s.allowedActions().isEmpty())
-            sb.append("AllowedActions: ").append(s.allowedActions()).append("\n");
 
         var rows = new ArrayList<InlineKeyboardRow>();
         if (hasIncident) {
