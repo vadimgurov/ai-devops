@@ -94,16 +94,10 @@ public class IncidentManager {
                                 .orElse(null)
                         : null;
                 if (prev != null) {
-                    var recurred = prev
-                            .withStatus(Incident.Status.OPEN)
-                            .addEvent(new IncidentEvent(Instant.now(), "recurrence",
-                                    Map.of("details", anomaly.details())));
+                    var recurred = prev.addEvent(new IncidentEvent(Instant.now(), "recurrence",
+                            Map.of("details", anomaly.details())));
                     kb.saveIncident(recurred);
-                    log.warn("Повтор инцидента {}: {}", prev.id(), exceptionClass);
-                    telegram.ifPresent(t -> t.sendMessage(
-                            "🔁 <b>Повтор</b> " + IncidentFormatter.htmlRef(recurred)
-                            + "\n" + IncidentFormatter.escapeHtml(anomaly.details())
-                            + "\n\nИнцидент уже расследовался. Нажми /incidents чтобы расследовать снова."));
+                    log.info("Повтор инцидента {}: {}", prev.id(), exceptionClass);
                     return;
                 }
                 // New exception — create incident and investigate
