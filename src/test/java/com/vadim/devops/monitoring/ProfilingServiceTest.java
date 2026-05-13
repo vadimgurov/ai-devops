@@ -60,9 +60,9 @@ class ProfilingServiceTest {
     @Test
     void profileAndOpen_reportsSuccessfulAndFailedServices() throws Exception {
         var okSvc = new ServiceConfig("go-ok", "go-ok", "h1", "go", null, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var failSvc = new ServiceConfig("go-fail", "go-fail", "h1", "go", null, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var host = new Host("h1", "host1", "prod", "1.2.3.4", "host1@example.com",
                 null, List.of(okSvc, failSvc), null, null);
         var incident = new Incident("inc-1", "h1", "cpu", Incident.Status.PROFILING,
@@ -92,9 +92,9 @@ class ProfilingServiceTest {
     @Test
     void profileAndOpen_profilesPrimaryTargetAndOtherHostServices() throws Exception {
         var mysqlSvc = new ServiceConfig("mysql-test", "mysql-test", "h1", "mysql", null, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var javaSvc = new ServiceConfig("crm-java-test", "crm-java-test", "h1", "java", "crm.service", null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var host = new Host("h1", "host1", "prod", "1.2.3.4", "host1@example.com",
                 null, List.of(mysqlSvc, javaSvc), null, null);
         var incident = new Incident("inc-2", "h1", "cpu", Incident.Status.PROFILING,
@@ -126,7 +126,7 @@ class ProfilingServiceTest {
     @Test
     void profileAndOpen_reportsProfilerTimeoutReasonForJava() throws Exception {
         var javaSvc = new ServiceConfig("crm-java-test", "crm-java-test", "h1", "java", "crm.service", null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var host = new Host("h1", "host1", "prod", "1.2.3.4", "host1@example.com",
                 null, List.of(javaSvc), null, null);
         var incident = new Incident("inc-3", "h1", "cpu", Incident.Status.PROFILING,
@@ -150,7 +150,7 @@ class ProfilingServiceTest {
     @Test
     void profileAndOpen_reportsAsyncProfilerStderrInsteadOfEmptyOutput() throws Exception {
         var javaSvc = new ServiceConfig("negotiator", "negotiator", "h1", "java", null, "deploy-negotiator-1",
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var host = new Host("h1", "baraban", "prod", "1.2.3.4", "baraban@example.com",
                 null, List.of(javaSvc), null, null);
         var incident = new Incident("inc-5", "h1", "cpu", Incident.Status.PROFILING,
@@ -178,7 +178,7 @@ class ProfilingServiceTest {
     @Test
     void profileAndOpen_usesUserLocalPySpyWithoutRepeatedApproval() throws Exception {
         var pythonSvc = new ServiceConfig("bloggers", "bloggers", "h1", "python", null, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var host = new Host("h1", "host1", "prod", "1.2.3.4", "host1@example.com",
                 null, List.of(pythonSvc), null, null);
         var incident = new Incident("inc-4", "h1", "cpu", Incident.Status.PROFILING,
@@ -205,7 +205,7 @@ class ProfilingServiceTest {
     @Test
     void profileAndOpen_reportsPySpyStderrInsteadOfEmptyOutput() throws Exception {
         var pythonSvc = new ServiceConfig("parser", "parser", "h1", "python", null, "deploy-parser-1",
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         var host = new Host("h1", "baraban", "prod", "1.2.3.4", "baraban@example.com",
                 null, List.of(pythonSvc), null, null);
         var incident = new Incident("inc-6", "h1", "cpu", Incident.Status.PROFILING,

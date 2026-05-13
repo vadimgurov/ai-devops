@@ -47,8 +47,31 @@ public class MonitoringScheduler {
                 var result = runner.run("ssh %s '%s'".formatted(
                         host.sshTarget(), service.healthCheck().replace("'", "'\\''")));
                 if (stopping.get() || result.interrupted()) return;
-                anomalyDetector.detectHealthChange(host.id(), service.id(), result.success())
-                        .forEach(incidentManager::onAnomaly);
+                var healthy = result.success();
+                var key = host.id() + "/" + service.id() + "/health";
+                var minMs = service.healthCheckMinDurationMs() != null ? service.healthCheckMinDurationMs() : 0L;
+                if (!healthy) {
+                    if (!metricBreaching.getOrDefault(key, false)) breachStart.put(key, Instant.now());
+                    metricBreaching.put(key, true);
+                    if (!incidentFired.getOrDefault(key, false)) {
+                        var elapsed = java.time.Duration.between(breachStart.get(key), Instant.now()).toMillis();
+                        if (elapsed >= minMs) {
+                            anomalyDetector.detectHealthChange(host.id(), service.id(), false)
+                                    .forEach(incidentManager::onAnomaly);
+                            incidentFired.put(key, true);
+                        }
+                    }
+                } else {
+                    if (metricBreaching.getOrDefault(key, false)) {
+                        if (incidentFired.getOrDefault(key, false)) {
+                            anomalyDetector.detectHealthChange(host.id(), service.id(), true)
+                                    .forEach(incidentManager::onAnomaly);
+                        }
+                        breachStart.remove(key);
+                        incidentFired.remove(key);
+                    }
+                    metricBreaching.put(key, false);
+                }
             }
         }
     }

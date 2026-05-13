@@ -152,7 +152,7 @@ public class InventoryTool {
         log.info("saveService hostId={} id={} unit={}", hostId, id, systemdUnit);
         try {
             var service = new ServiceConfig(id, name, hostId, runtime, systemdUnit,
-                    null, healthCheck, null, null, repoUrl, logsCommand, configFiles, allowedActions);
+                    null, healthCheck, null, null, repoUrl, logsCommand, null, configFiles, allowedActions);
             inventoryLoader.saveService(hostId, service);
             return "Сервис '%s' сохранён для хоста '%s'.".formatted(id, hostId);
         } catch (IOException e) {

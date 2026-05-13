@@ -164,17 +164,17 @@ class ExceptionScannerTest {
 
     private static ServiceConfig serviceWithUnit(String unit) {
         return new ServiceConfig("svc1", "svc1", "h1", "java", unit, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
     }
 
     private static ServiceConfig serviceWithContainer(String container) {
         return new ServiceConfig("svc1", "svc1", "h1", "python", null, container,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
     }
 
     private static ServiceConfig serviceNoSource() {
         return new ServiceConfig("svc1", "svc1", "h1", "java", null, null,
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
     }
 
     private static BashResult ok(String stdout) {
