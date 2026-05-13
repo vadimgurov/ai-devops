@@ -37,6 +37,15 @@ public class SourceCodeTool {
                 }
                 try {
                     var path = repoManager.ensureFresh(svc.repoUrl());
+                    // Persist the local path so the agent can find sources without re-cloning
+                    if (!path.equals(svc.sourcesPath())) {
+                        var updated = new com.vadim.devops.model.ServiceConfig(
+                                svc.id(), svc.name(), svc.hostId(), svc.runtime(), svc.systemdUnit(),
+                                svc.containerName(), svc.healthCheck(), svc.versionUrl(), path,
+                                svc.repoUrl(), svc.logsCommand(), svc.healthCheckMinDurationMs(),
+                                svc.configFiles());
+                        try { inventory.saveService(svc.hostId(), updated); } catch (Exception ignored) {}
+                    }
                     return "Исходники обновлены. Локальный путь: " + path;
                 } catch (Exception e) {
                     return "Ошибка git операции: " + e.getMessage();
