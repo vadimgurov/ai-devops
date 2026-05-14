@@ -83,6 +83,14 @@ public class CommandRegistry {
             var trimmed = chainPart.text().trim();
             if (trimmed.isEmpty()) continue;
 
+            if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+                var inner = trimmed.substring(1, trimmed.length() - 1).trim();
+                var innerClass = classify(inner);
+                if (innerClass == Classification.UNKNOWN) return Classification.UNKNOWN;
+                if (innerClass.ordinal() > overall.ordinal()) overall = innerClass;
+                continue;
+            }
+
             var stages = splitTopLevelOperators(trimmed, Mode.PIPELINE);
             if (stages.isEmpty()) continue;
 
@@ -449,6 +457,7 @@ public class CommandRegistry {
         var current = new StringBuilder();
         boolean inSingle = false, inDouble = false;
         int substitutionDepth = 0;
+        int parenDepth = 0;
         for (int i = 0; i < cmd.length(); i++) {
             char c = cmd.charAt(i);
             char next = i + 1 < cmd.length() ? cmd.charAt(i + 1) : '\0';
@@ -478,8 +487,18 @@ public class CommandRegistry {
                 current.append(c);
                 continue;
             }
+            if (!inSingle && !inDouble && substitutionDepth == 0 && c == '(') {
+                parenDepth++;
+                current.append(c);
+                continue;
+            }
+            if (!inSingle && !inDouble && substitutionDepth == 0 && parenDepth > 0 && c == ')') {
+                parenDepth--;
+                current.append(c);
+                continue;
+            }
 
-            if (inSingle || inDouble || substitutionDepth > 0) {
+            if (inSingle || inDouble || substitutionDepth > 0 || parenDepth > 0) {
                 current.append(c);
                 continue;
             }

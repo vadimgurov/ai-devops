@@ -205,4 +205,17 @@ class CommandRegistryTest {
         assertThat(registry.classify("cat /tmp/$(rm -rf /)/file"))
                 .isEqualTo(CommandRegistry.Classification.UNKNOWN);
     }
+
+    @Test
+    void classify_subshellFallback_isReadOnly() {
+        // netstat -tlnp 2>/dev/null || (lsof -i -P -n 2>/dev/null | grep java) — real prod hang case
+        assertThat(registry.classify("netstat -tlnp 2>/dev/null || (lsof -i -P -n 2>/dev/null | grep java)"))
+                .isEqualTo(CommandRegistry.Classification.READ_ONLY);
+    }
+
+    @Test
+    void classify_writeActionInSubshell_isUnknown() {
+        assertThat(registry.classify("cat /etc/hosts || (rm -rf /tmp)"))
+                .isEqualTo(CommandRegistry.Classification.UNKNOWN);
+    }
 }
