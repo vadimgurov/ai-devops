@@ -89,8 +89,15 @@ public class ExceptionScanner {
                 .map(String::trim)
                 .filter(l -> !l.isBlank())
                 .findFirst()
+                .map(ExceptionScanner::stripJournalPrefix)
                 .map(l -> l.length() > 120 ? l.substring(0, 120) : l)
                 .orElse(output.substring(0, Math.min(output.length(), 120)));
+    }
+
+    // journalctl short-iso: "2026-05-14T12:40:16+0000 hostname program[pid]: message"
+    private static String stripJournalPrefix(String line) {
+        int idx = line.indexOf("]: ");
+        return idx >= 0 ? line.substring(idx + 3) : line;
     }
 
     static String shellQuote(String value) {

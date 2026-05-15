@@ -145,6 +145,23 @@ class ExceptionScannerTest {
     }
 
     @Test
+    void scan_stripsJournalctlPrefixFromFingerprint() {
+        var svc = serviceWithContainer("app");
+        when(inventory.allHosts()).thenReturn(List.of(host("h1", "host1@example.com", svc)));
+        var journalLine = "2026-05-14T12:40:16+0000 ubuntu-basic-1-2-20gb java[16706]: " +
+                "2026-05-14 15:40:16.2 ERROR [0.1-8080-exec-1] c.v.c.m.OrderNotificationsListener" +
+                "       : Exception in order beforeSave";
+        when(runner.run(anyString())).thenReturn(ok(journalLine));
+
+        scanner.scan();
+
+        var captor = ArgumentCaptor.forClass(Anomaly.class);
+        verify(incidentManager).onAnomaly(captor.capture());
+        assertThat(captor.getValue().details()).contains("OrderNotificationsListener");
+        assertThat(captor.getValue().details()).contains("Exception in order beforeSave");
+    }
+
+    @Test
     void shellQuote_escapesSingleQuotesForBash() {
         assertThat(ExceptionScanner.shellQuote("a'b'c"))
                 .isEqualTo("'a'\"'\"'b'\"'\"'c'");
