@@ -22,6 +22,8 @@ public class LlmAgent {
 
     private static final Logger log = LoggerFactory.getLogger(LlmAgent.class);
     private static final int MAX_HISTORY_MESSAGES = 20;
+    // ~75K tokens — leaves ample room for system prompt, tools, question, and completion within a 1M token limit
+    private static final int MAX_HISTORY_CHARS = 300_000;
 
     private final ChatClient chatClient;
     private final KnowledgeBaseService kb;
@@ -86,8 +88,24 @@ public class LlmAgent {
         var full = incidentId != null
                 ? kb.loadConversation(incidentId)
                 : kb.loadTodaySession();
-        if (full.size() <= MAX_HISTORY_MESSAGES) return full;
-        return full.subList(full.size() - MAX_HISTORY_MESSAGES, full.size());
+        var byCount = full.size() <= MAX_HISTORY_MESSAGES
+                ? full
+                : full.subList(full.size() - MAX_HISTORY_MESSAGES, full.size());
+        return trimToCharBudget(byCount);
+    }
+
+    private static List<ConversationMessage> trimToCharBudget(List<ConversationMessage> messages) {
+        int total = messages.stream().mapToInt(m -> m.content() == null ? 0 : m.content().length()).sum();
+        if (total <= MAX_HISTORY_CHARS) return messages;
+        // Drop oldest messages until within budget
+        int start = 0;
+        while (start < messages.size() - 1 && total > MAX_HISTORY_CHARS) {
+            var dropped = messages.get(start);
+            total -= dropped.content() == null ? 0 : dropped.content().length();
+            start++;
+        }
+        log.debug("History trimmed to {} messages ({} chars) to stay within context budget", messages.size() - start, total);
+        return messages.subList(start, messages.size());
     }
 
     private static List<Message> toSpringMessages(List<ConversationMessage> history) {
