@@ -14,7 +14,7 @@ public class CompactLoggingAdvisor implements CallAdvisor {
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest req, CallAdvisorChain chain) {
         var msgs = req.prompt().getInstructions();
-        gray("→ DeepSeek [%d msgs]".formatted(msgs.size()));
+        gray("→ LLM [%d msgs]".formatted(msgs.size()));
 
         var resp = chain.nextCall(req);
 
@@ -27,7 +27,7 @@ public class CompactLoggingAdvisor implements CallAdvisor {
                     gray("← tool_call: %s(%s)".formatted(tc.name(), trunc(tc.arguments(), 150)));
                 }
             } else {
-                gray("← DeepSeek: %s".formatted(trunc(output.getText(), 150)));
+                gray("← LLM: %s".formatted(trunc(output.getText(), 150)));
             }
         }
 

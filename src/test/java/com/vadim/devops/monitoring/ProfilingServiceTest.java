@@ -48,6 +48,7 @@ class ProfilingServiceTest {
     @BeforeEach
     void setUp() {
         var props = new DevopsProperties(
+                new DevopsProperties.LlmProperties("deepseek"),
                 new DevopsProperties.KbProperties("./kb"),
                 new DevopsProperties.SshProperties(null, 1000, 1000),
                 new DevopsProperties.MonitoringProperties(1000, 1000, 30, 60, 90),

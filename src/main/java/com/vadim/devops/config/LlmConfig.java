@@ -2,12 +2,29 @@ package com.vadim.devops.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.deepseek.DeepSeekChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.boot.web.client.RestClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class LlmConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(LlmConfig.class);
+
+    @Bean
+    ChatClient.Builder chatClientBuilder(DeepSeekChatModel deepSeekChatModel,
+                                         OpenAiChatModel openAiChatModel,
+                                         DevopsProperties props) {
+        var provider = props.llm().provider();
+        log.info("LLM provider: {}", provider);
+        var model = props.llm().isOpenAi() ? openAiChatModel : deepSeekChatModel;
+        return ChatClient.builder(model);
+    }
 
     @Bean
     RestClientCustomizer deepSeekThinkingDisabledCustomizer(ObjectMapper objectMapper) {

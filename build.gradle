@@ -24,6 +24,7 @@ dependencyManagement {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.ai:spring-ai-starter-model-deepseek'
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 
     // YAML support for KB files
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'

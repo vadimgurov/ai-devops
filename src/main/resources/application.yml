@@ -19,12 +19,20 @@ spring:
     import: optional:file:./secrets.properties
   ai:
     deepseek:
-      api-key: ${DEEPSEEK_API_KEY}
+      api-key: ${DEEPSEEK_API_KEY:}
       chat:
         options:
           model: deepseek-v4-pro
+    openai:
+      api-key: ${OPENAI_API_KEY:none}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o}
 
 devops:
+  llm:
+    provider: ${LLM_PROVIDER:deepseek}
   kb:
     path: ${KB_PATH:./kb}
   monitoring:
