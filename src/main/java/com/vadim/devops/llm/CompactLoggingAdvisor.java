@@ -29,6 +29,11 @@ public class CompactLoggingAdvisor implements CallAdvisor {
             } else {
                 gray("← LLM: %s".formatted(trunc(output.getText(), 150)));
             }
+            var usage = chatResp.getMetadata().getUsage();
+            if (usage != null) {
+                gray("← tokens: prompt=%d, completion=%d, total=%d"
+                        .formatted(usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens()));
+            }
         }
 
         return resp;
