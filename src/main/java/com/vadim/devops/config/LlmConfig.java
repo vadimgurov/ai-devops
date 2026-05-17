@@ -2,6 +2,8 @@ package com.vadim.devops.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.vadim.devops.llm.CountingChatModel;
+import com.vadim.devops.llm.TokenUsageTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -19,11 +21,12 @@ public class LlmConfig {
     @Bean
     ChatClient.Builder chatClientBuilder(DeepSeekChatModel deepSeekChatModel,
                                          OpenAiChatModel openAiChatModel,
-                                         DevopsProperties props) {
+                                         DevopsProperties props,
+                                         TokenUsageTracker tokenUsageTracker) {
         var provider = props.llm().provider();
         log.info("LLM provider: {}", provider);
-        var model = props.llm().isOpenAi() ? openAiChatModel : deepSeekChatModel;
-        return ChatClient.builder(model);
+        var base = props.llm().isOpenAi() ? openAiChatModel : deepSeekChatModel;
+        return ChatClient.builder(new CountingChatModel(base, tokenUsageTracker));
     }
 
     @Bean

@@ -34,7 +34,6 @@ public class LlmAgent {
                     IncidentTool incidentTool, SourceCodeTool sourceCodeTool,
                     Optional<WebSearchTool> webSearchTool,
                     CompactLoggingAdvisor loggingAdvisor,
-                    TokenUsageAdvisor tokenUsageAdvisor,
                     TokenUsageTracker tokenUsageTracker) {
         this.kb = kb;
         this.tokenUsageTracker = tokenUsageTracker;
@@ -42,7 +41,7 @@ public class LlmAgent {
         webSearchTool.ifPresent(tools::add);
         this.chatClient = chatClientBuilder
                 .defaultTools(tools.toArray())
-                .defaultAdvisors(loggingAdvisor, tokenUsageAdvisor)
+                .defaultAdvisors(loggingAdvisor)
                 .defaultSystem(SYSTEM_PROMPT)
                 .build();
     }
@@ -65,7 +64,7 @@ public class LlmAgent {
 
         kb.saveSession(append(withQuestion, "assistant", response));
         return stats.calls() > 0
-                ? response + "\n\n📊 <i>%d вызовов LLM · %,d токенов</i>".formatted(stats.calls(), stats.totalTokens())
+                ? response + "\n\n> 📊 %d вызовов LLM · %,d токенов".formatted(stats.calls(), stats.totalTokens())
                 : response;
     }
 
