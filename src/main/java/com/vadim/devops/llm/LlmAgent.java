@@ -32,13 +32,14 @@ public class LlmAgent {
                     KnowledgeBaseService kb, BashTool bashTool, InventoryTool inventoryTool,
                     IncidentTool incidentTool, SourceCodeTool sourceCodeTool,
                     Optional<WebSearchTool> webSearchTool,
-                    CompactLoggingAdvisor loggingAdvisor) {
+                    CompactLoggingAdvisor loggingAdvisor,
+                    TokenUsageAdvisor tokenUsageAdvisor) {
         this.kb = kb;
         var tools = new java.util.ArrayList<Object>(List.of(bashTool, inventoryTool, incidentTool, sourceCodeTool));
         webSearchTool.ifPresent(tools::add);
         this.chatClient = chatClientBuilder
                 .defaultTools(tools.toArray())
-                .defaultAdvisors(loggingAdvisor)
+                .defaultAdvisors(loggingAdvisor, tokenUsageAdvisor)
                 .defaultSystem(SYSTEM_PROMPT)
                 .build();
     }

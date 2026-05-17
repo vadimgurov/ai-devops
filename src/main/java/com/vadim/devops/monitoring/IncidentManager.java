@@ -3,6 +3,7 @@ package com.vadim.devops.monitoring;
 import com.vadim.devops.kb.InventoryLoader;
 import com.vadim.devops.kb.KnowledgeBaseService;
 import com.vadim.devops.llm.LlmAgent;
+import com.vadim.devops.llm.TokenUsageTracker;
 import com.vadim.devops.model.Incident;
 import com.vadim.devops.model.IncidentEvent;
 import com.vadim.devops.model.IncidentFormatter;
@@ -40,6 +41,7 @@ public class IncidentManager {
     private final ObjectProvider<ProfilingService> profilingService;
     private final ProgressTracker progressTracker;
     private final InvestigationContext investigationContext;
+    private final TokenUsageTracker tokenUsageTracker;
 
     // In-memory: only running investigations (incidentId → Future)
     private final ConcurrentHashMap<String, Future<?>> active = new ConcurrentHashMap<>();
@@ -51,7 +53,8 @@ public class IncidentManager {
                            ObjectProvider<LlmAgent> llmAgent,
                            ObjectProvider<ProfilingService> profilingService,
                            ProgressTracker progressTracker,
-                           InvestigationContext investigationContext) {
+                           InvestigationContext investigationContext,
+                           TokenUsageTracker tokenUsageTracker) {
         this.kb = kb;
         this.inventory = inventory;
         this.telegram = telegram;
@@ -59,6 +62,7 @@ public class IncidentManager {
         this.profilingService = profilingService;
         this.progressTracker = progressTracker;
         this.investigationContext = investigationContext;
+        this.tokenUsageTracker = tokenUsageTracker;
     }
 
     @PostConstruct
@@ -351,14 +355,18 @@ public class IncidentManager {
         final var msgId = progressMsgId;
 
         investigationContext.set(current);
+        tokenUsageTracker.start();
         try {
             var result = agent.askInIncidentContext(incident.id(), buildQuestion(current));
+            var stats = tokenUsageTracker.getStats();
             progressTracker.clear();
             if (msgId != null) telegram.get().deleteMessage(chatId, msgId);
             telegram.ifPresent(t -> t.sendMessage(
                     "🔍 <b>Расследование завершено</b> для " + IncidentFormatter.htmlRef(incident) + ":\n"
-                            + TelegramMarkdownConverter.convert(result)));
+                            + TelegramMarkdownConverter.convert(result)
+                            + usageFooter(stats)));
         } catch (Exception e) {
+            var stats = tokenUsageTracker.getStats();
             progressTracker.clear();
             if (msgId != null) telegram.ifPresent(t -> t.deleteMessage(chatId, msgId));
             if (isCausedByInterrupt(e)) {
@@ -371,14 +379,16 @@ public class IncidentManager {
                         .orElse("\n\nГипотеза не была сформулирована.");
                 telegram.ifPresent(t -> t.sendMessage(
                         "⚠️ Расследование прервано для " + IncidentFormatter.htmlRef(incident) + "."
-                                + hypothesisPart));
+                                + hypothesisPart + usageFooter(stats)));
             } else {
                 log.warn("Расследование {} упало: {}", incident.id(), e.getMessage());
                 telegram.ifPresent(t -> t.sendMessage(
                         "❌ Расследование завершилось с ошибкой для " + IncidentFormatter.htmlRef(incident)
-                                + ": <code>" + IncidentFormatter.escapeHtml(e.getMessage()) + "</code>"));
+                                + ": <code>" + IncidentFormatter.escapeHtml(e.getMessage()) + "</code>"
+                                + usageFooter(stats)));
             }
         } finally {
+            tokenUsageTracker.clear();
             investigationContext.clear();
             active.remove(incident.id());
             if (!cancelled) {
@@ -389,6 +399,16 @@ public class IncidentManager {
                 tryPickUpWork();
             }
         }
+    }
+
+    private static String usageFooter(TokenUsageTracker.Stats stats) {
+        if (stats.calls() == 0) return "";
+        var footer = "\n\n📊 <i>%d вызовов LLM · %,d токенов итого</i>".formatted(stats.calls(), stats.totalTokens());
+        var topics = stats.topTopicsSummary();
+        if (!topics.isBlank()) {
+            footer += "\n<i>Больше всего: " + IncidentFormatter.escapeHtml(topics) + "</i>";
+        }
+        return footer;
     }
 
     private static String buildQuestion(Incident incident) {
