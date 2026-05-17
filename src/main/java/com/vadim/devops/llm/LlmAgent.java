@@ -27,14 +27,17 @@ public class LlmAgent {
 
     private final ChatClient chatClient;
     private final KnowledgeBaseService kb;
+    private final TokenUsageTracker tokenUsageTracker;
 
     public LlmAgent(ChatClient.Builder chatClientBuilder,
                     KnowledgeBaseService kb, BashTool bashTool, InventoryTool inventoryTool,
                     IncidentTool incidentTool, SourceCodeTool sourceCodeTool,
                     Optional<WebSearchTool> webSearchTool,
                     CompactLoggingAdvisor loggingAdvisor,
-                    TokenUsageAdvisor tokenUsageAdvisor) {
+                    TokenUsageAdvisor tokenUsageAdvisor,
+                    TokenUsageTracker tokenUsageTracker) {
         this.kb = kb;
+        this.tokenUsageTracker = tokenUsageTracker;
         var tools = new java.util.ArrayList<Object>(List.of(bashTool, inventoryTool, incidentTool, sourceCodeTool));
         webSearchTool.ifPresent(tools::add);
         this.chatClient = chatClientBuilder
@@ -49,16 +52,21 @@ public class LlmAgent {
         var withQuestion = append(history, "user", question);
         kb.saveSession(withQuestion);
 
+        tokenUsageTracker.start();
         log.debug("→ LLM ({} msgs in history)", history.size());
         var response = chatClient.prompt()
                 .messages(toSpringMessages(history))
                 .user(question)
                 .call()
                 .content();
+        var stats = tokenUsageTracker.getStats();
+        tokenUsageTracker.clear();
         log.debug("← LLM ответил ({} chars)", response == null ? 0 : response.length());
 
         kb.saveSession(append(withQuestion, "assistant", response));
-        return response;
+        return stats.calls() > 0
+                ? response + "\n\n📊 <i>%d вызовов LLM · %,d токенов</i>".formatted(stats.calls(), stats.totalTokens())
+                : response;
     }
 
     public String askInIncidentContext(String incidentId, String question) {
