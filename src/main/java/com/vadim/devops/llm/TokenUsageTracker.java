@@ -30,34 +30,33 @@ public class TokenUsageTracker {
         final Map<String, Integer> topicChars = new LinkedHashMap<>();
     }
 
-    private final ThreadLocal<Acc> state = new ThreadLocal<>();
+    // Not ThreadLocal: Spring AI tool-calling loop may switch threads between rounds
+    private Acc current;
 
-    public void start() { state.set(new Acc()); }
+    public synchronized void start() { current = new Acc(); }
 
-    public void record(int prompt, int completion, List<Message> messages) {
-        var acc = state.get();
-        if (acc == null) return;
-        acc.calls++;
-        acc.promptTokens += prompt;
-        acc.completionTokens += completion;
-        // Only process new messages since last call (tool results accumulate)
-        for (int i = acc.seenMessages; i < messages.size(); i++) {
+    public synchronized void record(int prompt, int completion, List<Message> messages) {
+        if (current == null) return;
+        current.calls++;
+        current.promptTokens += prompt;
+        current.completionTokens += completion;
+        for (int i = current.seenMessages; i < messages.size(); i++) {
             var msg = messages.get(i);
             var text = msg.getText();
             if (text != null && !text.isBlank()) {
-                acc.topicChars.merge(topic(msg.getMessageType(), text), text.length(), Integer::sum);
+                current.topicChars.merge(topic(msg.getMessageType(), text), text.length(), Integer::sum);
             }
         }
-        acc.seenMessages = messages.size();
+        current.seenMessages = messages.size();
     }
 
-    public Stats getStats() {
-        var acc = state.get();
-        return acc == null ? new Stats(0, 0, 0, Map.of())
-                : new Stats(acc.calls, acc.promptTokens, acc.completionTokens, Map.copyOf(acc.topicChars));
+    public synchronized Stats getStats() {
+        return current == null ? new Stats(0, 0, 0, Map.of())
+                : new Stats(current.calls, current.promptTokens, current.completionTokens,
+                        Map.copyOf(current.topicChars));
     }
 
-    public void clear() { state.remove(); }
+    public synchronized void clear() { current = null; }
 
     private static String topic(MessageType type, String text) {
         return switch (type) {
