@@ -63,9 +63,11 @@ public class LlmAgent {
         log.debug("← LLM ответил ({} chars)", response == null ? 0 : response.length());
 
         kb.saveSession(append(withQuestion, "assistant", response));
-        return stats.calls() > 0
-                ? response + "\n\n> 📊 %d вызовов LLM · %,d токенов".formatted(stats.calls(), stats.totalTokens())
-                : response;
+        if (stats.calls() == 0) return response;
+        var footer = "\n\n> 📊 %d вызовов LLM".formatted(stats.calls());
+        if (stats.toolCalls() > 0) footer += " · %d тулов".formatted(stats.toolCalls());
+        footer += " · %,d токенов".formatted(stats.totalTokens());
+        return response + footer;
     }
 
     public String askInIncidentContext(String incidentId, String question) {

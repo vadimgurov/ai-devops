@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 @Component
 public class TokenUsageTracker {
 
-    public record Stats(int calls, int promptTokens, int completionTokens, Map<String, Integer> topicChars) {
+    public record Stats(int calls, int toolCalls, int promptTokens, int completionTokens, Map<String, Integer> topicChars) {
         public int totalTokens() { return promptTokens + completionTokens; }
 
         public String topTopicsSummary() {
@@ -26,24 +26,29 @@ public class TokenUsageTracker {
     }
 
     private static class Acc {
-        int calls, promptTokens, completionTokens, seenMessages;
+        int calls, toolCalls, promptTokens, completionTokens, seenMessages;
         final Map<String, Integer> topicChars = new LinkedHashMap<>();
     }
 
-    // Not ThreadLocal: Spring AI tool-calling loop may switch threads between rounds
     private Acc current;
 
     public synchronized void start() { current = new Acc(); }
 
-    /** Called per HTTP round-trip to the LLM API (includes all tool-calling rounds). */
-    public synchronized void recordCall(int prompt, int completion) {
+    /** Called once per LLM API round (observation onStop). Also counts tool calls in that round. */
+    public synchronized void recordLlmRound(int toolCallsInRound) {
         if (current == null) return;
         current.calls++;
-        current.promptTokens += prompt;
-        current.completionTokens += completion;
+        current.toolCalls += toolCallsInRound;
     }
 
-    /** Called once with the final prompt messages for topic analysis. */
+    /** Called once after the full tool-calling cycle with the accumulated token total. */
+    public synchronized void recordFinalUsage(int prompt, int completion) {
+        if (current == null) return;
+        current.promptTokens = prompt;
+        current.completionTokens = completion;
+    }
+
+    /** Called once with the initial prompt messages for topic breakdown. */
     public synchronized void recordMessages(List<Message> messages) {
         if (current == null) return;
         for (int i = current.seenMessages; i < messages.size(); i++) {
@@ -57,8 +62,8 @@ public class TokenUsageTracker {
     }
 
     public synchronized Stats getStats() {
-        return current == null ? new Stats(0, 0, 0, Map.of())
-                : new Stats(current.calls, current.promptTokens, current.completionTokens,
+        return current == null ? new Stats(0, 0, 0, 0, Map.of())
+                : new Stats(current.calls, current.toolCalls, current.promptTokens, current.completionTokens,
                         Map.copyOf(current.topicChars));
     }
 

@@ -30,13 +30,18 @@ public class ProgressService {
                 .map(incident -> "⏳ Думаю об инциденте " + IncidentFormatter.htmlRef(incident))
                 .orElse("⏳ Думаю...");
         var stats = tokenUsageTracker.getStats();
-        var tokenLine = stats.calls() > 0
-                ? "\n🔢 Вызовов LLM: %d | Токены: %,d".formatted(stats.calls(), stats.totalTokens())
-                : "";
+        final var tokenLine = buildTokenLine(stats);
         tracker.get()
                 .filter(s -> tracker.tryAcquireSlot())
                 .ifPresent(s -> notifier.get().editMessage(
                         s.chatId(), s.messageId(), prefix + tokenLine + "\n\n" + statusLine));
+    }
+
+    private static String buildTokenLine(TokenUsageTracker.Stats stats) {
+        if (stats.calls() == 0) return "";
+        var line = "\n🔢 Вызовов LLM: %d".formatted(stats.calls());
+        if (stats.toolCalls() > 0) line += " | Тулов: %d".formatted(stats.toolCalls());
+        return line + " | Токены: %,d".formatted(stats.totalTokens());
     }
 
     public void forceUpdate(String statusLine) {

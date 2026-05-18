@@ -7,8 +7,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
 /**
- * Wraps a ChatModel to record message topic breakdown in TokenUsageTracker.
- * Call counting and token counting happen at HTTP level in LlmConfig.
+ * Wraps ChatModel to:
+ * - Record final accumulated token usage (after all tool-calling rounds complete).
+ * - Record initial prompt messages for topic breakdown.
+ * Per-round call counting is done by LlmCallObservationHandler.
  */
 public class CountingChatModel implements ChatModel {
 
@@ -24,6 +26,14 @@ public class CountingChatModel implements ChatModel {
     public ChatResponse call(Prompt prompt) {
         var response = delegate.call(prompt);
         tracker.recordMessages(prompt.getInstructions());
+        if (response != null) {
+            var usage = response.getMetadata().getUsage();
+            if (usage != null) {
+                tracker.recordFinalUsage(
+                        usage.getPromptTokens() != null ? usage.getPromptTokens() : 0,
+                        usage.getCompletionTokens() != null ? usage.getCompletionTokens() : 0);
+            }
+        }
         return response;
     }
 

@@ -403,7 +403,9 @@ public class IncidentManager {
 
     private static String usageFooter(TokenUsageTracker.Stats stats) {
         if (stats.calls() == 0) return "";
-        var footer = "\n\n📊 <i>%d вызовов LLM · %,d токенов итого</i>".formatted(stats.calls(), stats.totalTokens());
+        var footer = "\n\n📊 <i>%d вызовов LLM".formatted(stats.calls());
+        if (stats.toolCalls() > 0) footer += " · %d тулов".formatted(stats.toolCalls());
+        footer += " · %,d токенов итого</i>".formatted(stats.totalTokens());
         var topics = stats.topTopicsSummary();
         if (!topics.isBlank()) {
             footer += "\n<i>Больше всего: " + IncidentFormatter.escapeHtml(topics) + "</i>";
