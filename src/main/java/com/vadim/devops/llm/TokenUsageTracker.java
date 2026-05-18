@@ -35,11 +35,17 @@ public class TokenUsageTracker {
 
     public synchronized void start() { current = new Acc(); }
 
-    public synchronized void record(int prompt, int completion, List<Message> messages) {
+    /** Called per HTTP round-trip to the LLM API (includes all tool-calling rounds). */
+    public synchronized void recordCall(int prompt, int completion) {
         if (current == null) return;
         current.calls++;
         current.promptTokens += prompt;
         current.completionTokens += completion;
+    }
+
+    /** Called once with the final prompt messages for topic analysis. */
+    public synchronized void recordMessages(List<Message> messages) {
+        if (current == null) return;
         for (int i = current.seenMessages; i < messages.size(); i++) {
             var msg = messages.get(i);
             var text = msg.getText();

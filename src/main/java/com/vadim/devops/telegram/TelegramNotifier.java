@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
+import okhttp3.OkHttpClient;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
@@ -17,6 +18,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
@@ -30,7 +32,10 @@ public class TelegramNotifier {
     private final String chatId;
 
     public TelegramNotifier(DevopsProperties props) {
-        this.client = new OkHttpTelegramClient(props.telegram().token());
+        var httpClient = new OkHttpClient.Builder()
+                .callTimeout(Duration.ofSeconds(30))
+                .build();
+        this.client = new OkHttpTelegramClient(httpClient, props.telegram().token());
         this.chatId = props.telegram().operatorChatId();
     }
 

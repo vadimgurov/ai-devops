@@ -52,6 +52,8 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
             r -> new Thread(r, "llm-worker"));
 
     private final String operatorChatId;
+    private final ExecutorService commandExecutor = Executors.newFixedThreadPool(2,
+            r -> new Thread(r, "tg-command"));
 
     public DevopsTelegramBot(DevopsProperties props, TelegramNotifier notifier,
                              ApprovalService approvalService, LlmAgent llmAgent,
@@ -122,6 +124,11 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
 
         log.info("Telegram [{}]: {}", user, text);
 
+        // All command handling is off-loaded so the polling thread is never blocked by Telegram API calls
+        commandExecutor.submit(() -> handleCommand(chatId, text));
+    }
+
+    private void handleCommand(String chatId, String text) {
         switch (text) {
             case "/stop" -> {
                 if (incidentManager.cancelInvestigation()) {
