@@ -12,6 +12,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.deepseek.DeepSeekChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.web.client.RestClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +31,12 @@ public class LlmConfig {
         log.info("LLM provider: {}", provider);
         var base = props.llm().isOpenAi() ? openAiChatModel : deepSeekChatModel;
         return ChatClient.builder(new CountingChatModel(base, tokenUsageTracker));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    ObservationRegistry observationRegistry() {
+        return ObservationRegistry.create();
     }
 
     @Bean
