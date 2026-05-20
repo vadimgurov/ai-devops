@@ -174,11 +174,17 @@ public class BashTool {
         }
     }
 
+    private static final int MAX_OUTPUT_CHARS = 8_000;
+
     private static String format(com.vadim.devops.bash.BashResult r) {
-        return "exit=%d\n%s%s".formatted(
-                r.exitCode(),
-                r.stdout().isBlank() ? "" : r.stdout(),
-                r.stderr().isBlank() ? "" : "\nSTDERR: " + r.stderr());
+        var out = truncate(r.stdout());
+        var err = r.stderr().isBlank() ? "" : "\nSTDERR: " + truncate(r.stderr());
+        return "exit=%d\n%s%s".formatted(r.exitCode(), out, err);
+    }
+
+    private static String truncate(String s) {
+        if (s.length() <= MAX_OUTPUT_CHARS) return s;
+        return s.substring(0, MAX_OUTPUT_CHARS) + "\n[...truncated %,d chars]".formatted(s.length() - MAX_OUTPUT_CHARS);
     }
 
     private static String escapeHtml(String text) {
