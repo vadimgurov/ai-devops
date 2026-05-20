@@ -145,6 +145,48 @@ class ExceptionScannerTest {
     }
 
     @Test
+    void scan_fingerprintUsesExceptionClassIgnoringTimestamp() {
+        // Same exception at two different timestamps must produce the same fingerprint so
+        // the in-memory deduplication works across consecutive scans.
+        var svc = serviceWithContainer("app");
+        when(inventory.allHosts()).thenReturn(List.of(host("h1", "host1@example.com", svc)));
+        var line1 = "2026-05-20 10:43:04.0 ERROR [http-nio-8080-exec-5] o.a.c.c.C : " +
+                "Servlet.service() threw exception; nested exception is " +
+                "org.apache.tomcat.util.http.fileupload.MultipartStream$MalformedStreamException: Stream ended unexpectedly";
+        var line2 = "2026-05-20 14:15:01.0 ERROR [http-nio-8080-exec-3] o.a.c.c.C : " +
+                "Servlet.service() threw exception; nested exception is " +
+                "org.apache.tomcat.util.http.fileupload.MultipartStream$MalformedStreamException: Stream ended unexpectedly";
+        when(runner.run(anyString())).thenReturn(ok(line1)).thenReturn(ok(line2));
+
+        scanner.scan();
+        scanner.scan(); // same exception class, different timestamp → must be deduplicated
+
+        verify(incidentManager, times(1)).onAnomaly(any());
+    }
+
+    @Test
+    void scan_fingerprintExceptionClassAppearsInSummary() {
+        // The exception class must appear in the incident summary so that recurrence detection
+        // in IncidentManager can find similar resolved incidents via text search.
+        var svc = serviceWithContainer("app");
+        when(inventory.allHosts()).thenReturn(List.of(host("h1", "host1@example.com", svc)));
+        var longLine = "2026-05-20 10:43:04.0 ERROR [exec-5] o.a.c.c.C : Servlet.service() threw " +
+                "exception; nested exception is java.io.IOException: " +
+                "org.apache.tomcat.util.http.fileupload.impl.IOFileUploadException: " +
+                "org.apache.tomcat.util.http.fileupload.MultipartStream$MalformedStreamException: " +
+                "Stream ended unexpectedly";
+        when(runner.run(anyString())).thenReturn(ok(longLine));
+
+        scanner.scan();
+
+        var captor = ArgumentCaptor.forClass(Anomaly.class);
+        verify(incidentManager).onAnomaly(captor.capture());
+        // Exception class must appear in details even though it's beyond the 120-char truncation point
+        assertThat(captor.getValue().details()).contains("Exception");
+        assertThat(captor.getValue().details()).doesNotStartWith("Исключения в логах: 2026-05-20");
+    }
+
+    @Test
     void scan_stripsJournalctlPrefixFromFingerprint() {
         var svc = serviceWithContainer("app");
         when(inventory.allHosts()).thenReturn(List.of(host("h1", "host1@example.com", svc)));

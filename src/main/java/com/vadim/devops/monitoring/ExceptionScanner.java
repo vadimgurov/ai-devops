@@ -12,11 +12,15 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 @Component
 public class ExceptionScanner {
 
     private static final Logger log = LoggerFactory.getLogger(ExceptionScanner.class);
+
+    private static final Pattern EXCEPTION_CLASS_PATTERN =
+            Pattern.compile("[A-Za-z][A-Za-z0-9.]*(?:Exception|Error|Panic|Traceback)");
 
     private static final String GREP_PATTERN =
             "grep -E '(Exception|Traceback|FATAL|PANIC|panic:)' 2>/dev/null"
@@ -85,6 +89,19 @@ public class ExceptionScanner {
     }
 
     private static String fingerprint(String output) {
+        // Search all lines for an exception class — prefer it as a stable, timestamp-free fingerprint
+        for (var line : output.lines().map(String::trim).filter(l -> !l.isBlank()).toList()) {
+            var m = EXCEPTION_CLASS_PATTERN.matcher(line);
+            if (m.find()) {
+                var suffix = line.substring(m.end()).trim();
+                // suffix may start with ':' (e.g. ": message") — don't add extra colon
+                var fp = suffix.isBlank() ? m.group()
+                        : suffix.startsWith(":") ? m.group() + suffix
+                        : m.group() + ": " + suffix;
+                return fp.length() > 120 ? fp.substring(0, 120) : fp;
+            }
+        }
+        // No exception class found — fall back to first line without journalctl prefix
         return output.lines()
                 .map(String::trim)
                 .filter(l -> !l.isBlank())

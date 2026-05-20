@@ -101,7 +101,12 @@ public class IncidentManager {
                     var recurred = prev.addEvent(new IncidentEvent(Instant.now(), "recurrence",
                             Map.of("details", anomaly.details())));
                     kb.saveIncident(recurred);
-                    log.info("Повтор инцидента {}: {}", prev.id(), exceptionClass);
+                    var recurrenceCount = recurred.events().stream()
+                            .filter(e -> "recurrence".equals(e.eventType())).count();
+                    log.info("Повтор инцидента {} (×{}): {}", prev.id(), recurrenceCount, exceptionClass);
+                    telegram.ifPresent(t -> t.sendMessage(
+                            "🔁 Повтор ×" + recurrenceCount + " — " + IncidentFormatter.htmlRef(prev)
+                                    + "\n<code>" + IncidentFormatter.escapeHtml(anomaly.details()) + "</code>"));
                     return;
                 }
                 // New exception — create incident and investigate
