@@ -184,7 +184,7 @@ public class BashTool {
 
     private static String truncate(String s) {
         if (s.length() <= MAX_OUTPUT_CHARS) return s;
-        return s.substring(0, MAX_OUTPUT_CHARS) + "\n[...truncated %,d chars]".formatted(s.length() - MAX_OUTPUT_CHARS);
+        return s.substring(0, MAX_OUTPUT_CHARS) + "\n[...truncated %,d chars — используй более точную команду: grep, tail, head, sed]".formatted(s.length() - MAX_OUTPUT_CHARS);
     }
 
     private static String escapeHtml(String text) {
