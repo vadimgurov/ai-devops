@@ -34,14 +34,17 @@ public class TokenUsageTracker {
 
     public synchronized void start() { current = new Acc(); }
 
-    /** Called once per LLM API round (observation onStop). Also counts tool calls in that round. */
-    public synchronized void recordLlmRound(int toolCallsInRound) {
+    /** Called once per LLM API round (observation onStop). Accumulates calls, tool calls, and tokens. */
+    public synchronized void recordLlmRound(int toolCallsInRound, int promptTokens, int completionTokens) {
         if (current == null) return;
         current.calls++;
         current.toolCalls += toolCallsInRound;
+        current.promptTokens += promptTokens;
+        current.completionTokens += completionTokens;
     }
 
-    /** Called once after the full tool-calling cycle with the accumulated token total. */
+    /** Called once after the full tool-calling cycle with the final cumulative token total.
+     *  Overrides the running sum in case the API reports cumulative (not per-round) usage. */
     public synchronized void recordFinalUsage(int prompt, int completion) {
         if (current == null) return;
         current.promptTokens = prompt;
