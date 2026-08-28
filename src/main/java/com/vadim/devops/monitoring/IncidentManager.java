@@ -13,10 +13,13 @@ import com.vadim.devops.telegram.TelegramNotifier;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
@@ -27,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 @Service
@@ -42,11 +46,15 @@ public class IncidentManager {
     private final ProgressTracker progressTracker;
     private final InvestigationContext investigationContext;
     private final TokenUsageTracker tokenUsageTracker;
+    private final Duration recurrenceNotifyCooldown;
 
     // In-memory: only running investigations (incidentId → Future)
     private final ConcurrentHashMap<String, Future<?>> active = new ConcurrentHashMap<>();
     private final ExecutorService investigationPool = Executors.newSingleThreadExecutor(
             r -> new Thread(r, "investigation"));
+    // Set when the LLM API rejects a request with a non-transient error (bad key, no balance, quota
+    // exhausted) — retrying won't help, so auto pick-up stops until an operator retries manually.
+    private final AtomicBoolean llmSuspended = new AtomicBoolean(false);
 
     public IncidentManager(KnowledgeBaseService kb, InventoryLoader inventory,
                            Optional<TelegramNotifier> telegram,
@@ -54,7 +62,9 @@ public class IncidentManager {
                            ObjectProvider<ProfilingService> profilingService,
                            ProgressTracker progressTracker,
                            InvestigationContext investigationContext,
-                           TokenUsageTracker tokenUsageTracker) {
+                           TokenUsageTracker tokenUsageTracker,
+                           @Value("${devops.monitoring.recurrence-notify-cooldown-ms:3600000}")
+                           long recurrenceNotifyCooldownMs) {
         this.kb = kb;
         this.inventory = inventory;
         this.telegram = telegram;
@@ -63,6 +73,7 @@ public class IncidentManager {
         this.progressTracker = progressTracker;
         this.investigationContext = investigationContext;
         this.tokenUsageTracker = tokenUsageTracker;
+        this.recurrenceNotifyCooldown = Duration.ofMillis(recurrenceNotifyCooldownMs);
     }
 
     @PostConstruct
@@ -98,15 +109,18 @@ public class IncidentManager {
                                 .orElse(null)
                         : null;
                 if (prev != null) {
+                    var notify = dueForRecurrenceNotification(prev);
                     var recurred = prev.addEvent(new IncidentEvent(Instant.now(), "recurrence",
-                            Map.of("details", anomaly.details())));
+                            Map.of("details", anomaly.details(), "notified", notify)));
                     kb.saveIncident(recurred);
                     var recurrenceCount = recurred.events().stream()
                             .filter(e -> "recurrence".equals(e.eventType())).count();
                     log.info("Повтор инцидента {} (×{}): {}", prev.id(), recurrenceCount, exceptionClass);
-                    telegram.ifPresent(t -> t.sendMessage(
-                            "🔁 Повтор ×" + recurrenceCount + " — " + IncidentFormatter.htmlRef(prev)
-                                    + "\n<code>" + IncidentFormatter.escapeHtml(anomaly.details()) + "</code>"));
+                    if (notify) {
+                        telegram.ifPresent(t -> t.sendMessage(
+                                "🔁 Повтор ×" + recurrenceCount + " — " + IncidentFormatter.htmlRef(prev)
+                                        + "\n<code>" + IncidentFormatter.escapeHtml(anomaly.details()) + "</code>"));
+                    }
                     return;
                 }
                 // New exception — create incident and investigate
@@ -186,6 +200,7 @@ public class IncidentManager {
         if (!active.isEmpty()) return false;
         var agent = llmAgent.getIfAvailable();
         if (agent == null) return false;
+        llmSuspended.set(false); // operator explicitly asked to try again
         return kb.loadIncident(incidentId)
                 .filter(i -> i.status() == Incident.Status.OPEN)  // PROFILING not eligible yet
                 .map(i -> {
@@ -290,6 +305,7 @@ public class IncidentManager {
 
     @Scheduled(fixedDelay = 30_000, initialDelay = 5_000)
     synchronized void tryPickUpWork() {
+        if (llmSuspended.get()) return;
         if (!active.isEmpty()) return;
         var agent = llmAgent.getIfAvailable();
         if (agent == null) return;
@@ -385,6 +401,17 @@ public class IncidentManager {
                 telegram.ifPresent(t -> t.sendMessage(
                         "⚠️ Расследование прервано для " + IncidentFormatter.htmlRef(incident) + "."
                                 + hypothesisPart + usageFooter(stats)));
+            } else if (isNonTransientLlmError(e)) {
+                log.warn("Расследование {} упало: LLM API отклонил запрос без права на повтор: {}",
+                        incident.id(), e.getMessage());
+                if (!llmSuspended.getAndSet(true)) {
+                    telegram.ifPresent(t -> t.sendMessage(
+                            "🛑 LLM API отклонил запрос (ключ/баланс/квота): <code>"
+                                    + IncidentFormatter.escapeHtml(e.getMessage()) + "</code>\n"
+                                    + "Автоматические расследования приостановлены, чтобы не спамить чат повторами.\n"
+                                    + "Инцидент " + IncidentFormatter.htmlRef(incident) + " остаётся открытым — "
+                                    + "запустите расследование вручную командой /investigate, когда проблема будет устранена."));
+                }
             } else {
                 log.warn("Расследование {} упало: {}", incident.id(), e.getMessage());
                 telegram.ifPresent(t -> t.sendMessage(
@@ -401,7 +428,7 @@ public class IncidentManager {
                 kb.loadIncident(incident.id())
                         .filter(i -> i.status() == Incident.Status.INVESTIGATING)
                         .ifPresent(i -> kb.saveIncident(i.withStatus(Incident.Status.OPEN)));
-                tryPickUpWork();
+                if (!llmSuspended.get()) tryPickUpWork();
             }
         }
     }
@@ -466,9 +493,30 @@ public class IncidentManager {
         return m.find() ? m.group() : null;
     }
 
+    /** Не шлём "Повтор" в чат на каждое срабатывание — иначе часто повторяющееся известное
+     *  исключение заваливает оператора сообщениями. Уведомляем не чаще recurrenceNotifyCooldown. */
+    private boolean dueForRecurrenceNotification(Incident prev) {
+        var lastNotifiedAt = prev.events() == null ? null : prev.events().stream()
+                .filter(e -> "recurrence".equals(e.eventType()) && Boolean.TRUE.equals(e.payload().get("notified")))
+                .map(IncidentEvent::ts)
+                .max(Instant::compareTo)
+                .orElse(prev.startedAt());
+        return lastNotifiedAt == null
+                || Duration.between(lastNotifiedAt, Instant.now()).compareTo(recurrenceNotifyCooldown) >= 0;
+    }
+
     private static boolean isCausedByInterrupt(Throwable e) {
         for (var t = e; t != null; t = t.getCause()) {
             if (t instanceof InterruptedException) return true;
+        }
+        return false;
+    }
+
+    // Spring AI wraps any 4xx response from the LLM provider (bad key, insufficient balance, quota
+    // exceeded) in NonTransientAiException — retrying the same request will fail the same way.
+    private static boolean isNonTransientLlmError(Throwable e) {
+        for (var t = e; t != null; t = t.getCause()) {
+            if (t instanceof NonTransientAiException) return true;
         }
         return false;
     }

@@ -41,6 +41,7 @@ devops:
     bash-timeout-seconds: 30
     profiling-duration-seconds: 60
     profiling-command-timeout-seconds: 90
+    recurrence-notify-cooldown-ms: 3600000
   telegram:
     token: ${TELEGRAM_TOKEN}
     operator-chat-id: ${TELEGRAM_CHAT_ID}
