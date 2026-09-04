@@ -22,10 +22,6 @@ out/
 .settings
 .springBeans
 .sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-!bin/*.sh
 
 ### NetBeans ###
 /nbproject/private/
@@ -58,3 +54,6 @@ logs/
 
 ### Cloned source repos ###
 repos/
+
+### Собранный локально jar для деплоя ###
+/app.jar
