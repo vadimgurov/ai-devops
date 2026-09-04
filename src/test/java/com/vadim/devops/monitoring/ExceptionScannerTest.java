@@ -204,9 +204,14 @@ class ExceptionScannerTest {
     }
 
     @Test
-    void shellQuote_escapesSingleQuotesForBash() {
-        assertThat(ExceptionScanner.shellQuote("a'b'c"))
-                .isEqualTo("'a'\"'\"'b'\"'\"'c'");
+    void skipsSshWrapForLocalHostWithoutSshTarget() {
+        var svc = serviceWithUnit("devops-agent.service");
+        when(inventory.allHosts()).thenReturn(List.of(host("self-host", "null", svc)));
+        when(runner.run(anyString())).thenReturn(ok(""));
+
+        scanner.scan();
+
+        assertThat(captureCmd()).startsWith("journalctl -u devops-agent.service").doesNotContain("ssh ");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

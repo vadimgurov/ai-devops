@@ -1,5 +1,6 @@
 package com.vadim.devops.llm;
 
+import com.vadim.devops.bash.HostCommand;
 import com.vadim.devops.bash.BashService;
 import com.vadim.devops.kb.CommandRegistry;
 import com.vadim.devops.kb.InventoryLoader;
@@ -84,7 +85,7 @@ public class BashTool {
             return printAndReturn("Неизвестный хост: '%s'. Доступные: %s".formatted(hostId, available));
         }
         var host = hostOpt.get();
-        var fullCmd = sshWrap(host, command);
+        var fullCmd = HostCommand.wrap(host.sshTarget(), command);
 
         return switch (commandRegistry.classify(command)) {
             case READ_ONLY -> printAndReturn(format(bashService.exec(fullCmd)));
@@ -145,9 +146,6 @@ public class BashTool {
         return stripped.matches("(?s)(git\\s+(clone|pull|fetch).*|mkdir.*&&.*git\\s+(clone|pull).*)");
     }
 
-    private static String sshWrap(Host host, String command) {
-        return "ssh %s '%s'".formatted(host.sshTarget(), command.replace("'", "'\\''"));
-    }
 
     private ApprovalService.Decision requestAndWait(String ignored, String desc, boolean canAlways) {
         var progressSnapshot = progressTracker.snapshot().orElse(null);

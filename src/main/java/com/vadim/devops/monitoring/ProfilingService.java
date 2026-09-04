@@ -1,5 +1,6 @@
 package com.vadim.devops.monitoring;
 
+import com.vadim.devops.bash.HostCommand;
 import com.vadim.devops.bash.BashResult;
 import com.vadim.devops.bash.BashRunner;
 import com.vadim.devops.config.DevopsProperties;
@@ -541,10 +542,10 @@ public class ProfilingService {
     }
 
     private BashResult ssh(Host host, String cmd) {
-        return runner.run("ssh %s '%s'".formatted(host.sshTarget(), cmd.replace("'", "'\\''")));
+        return runner.run(HostCommand.wrap(host.sshTarget(), cmd));
     }
 
     private BashResult ssh(Host host, String cmd, int timeoutSeconds) {
-        return runner.run("ssh %s '%s'".formatted(host.sshTarget(), cmd.replace("'", "'\\''")), timeoutSeconds);
+        return runner.run(HostCommand.wrap(host.sshTarget(), cmd), timeoutSeconds);
     }
 }

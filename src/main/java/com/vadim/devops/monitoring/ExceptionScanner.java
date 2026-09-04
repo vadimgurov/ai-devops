@@ -1,5 +1,6 @@
 package com.vadim.devops.monitoring;
 
+import com.vadim.devops.bash.HostCommand;
 import com.vadim.devops.bash.BashRunner;
 import com.vadim.devops.kb.InventoryLoader;
 import com.vadim.devops.model.ServiceConfig;
@@ -85,7 +86,7 @@ public class ExceptionScanner {
         } else {
             return null;
         }
-        return "ssh %s %s".formatted(sshTarget, shellQuote(fetchCmd + " | " + GREP_PATTERN));
+        return HostCommand.wrap(sshTarget, fetchCmd + " | " + GREP_PATTERN);
     }
 
     private static String fingerprint(String output) {
@@ -117,7 +118,4 @@ public class ExceptionScanner {
         return idx >= 0 ? line.substring(idx + 3) : line;
     }
 
-    static String shellQuote(String value) {
-        return "'" + value.replace("'", "'\"'\"'") + "'";
-    }
 }

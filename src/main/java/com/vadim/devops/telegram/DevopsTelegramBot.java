@@ -168,7 +168,7 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                         }, llmExecutor)
                         .thenAccept(response -> sendHtml(chatId, TelegramMarkdownConverter.convert(response)))
                         .exceptionally(e -> {
-                            if (!isCausedByInterrupt(e)) sendReply(chatId, "Ошибка: " + e.getMessage());
+                            if (!isCausedByInterrupt(e)) sendReply(chatId, "Ошибка: " + esc(e.getMessage()));
                             return null;
                         });
             }
@@ -210,11 +210,11 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                 case INVESTIGATING -> "🔄";
                 default           -> "❓";
             };
-            sb.append(statusEmoji).append(" <code>").append(inc.id()).append("</code>")
-              .append(" — <code>").append(inc.hostId()).append("</code>")
-              .append(inc.serviceId() != null ? "/<code>" + inc.serviceId() + "</code>" : "")
+            sb.append(statusEmoji).append(" ").append(code(inc.id()))
+              .append(" — ").append(code(inc.hostId()))
+              .append(inc.serviceId() != null ? "/" + code(inc.serviceId()) : "")
               .append(" [").append(inc.status()).append("]\n")
-              .append(inc.summary()).append("\n\n");
+              .append(esc(inc.summary())).append("\n\n");
             var actionBtn = switch (inc.status()) {
                 case PROFILING     -> btn("⏭ Пропустить профайлинг", "skip_profiling:" + inc.id());
                 case OPEN          -> btn("🔍 Расследовать", "investigate:" + inc.id());
@@ -242,10 +242,10 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         for (var inc : page) {
             var recurrences = inc.events() == null ? 0L
                     : inc.events().stream().filter(e -> "recurrence".equals(e.eventType())).count();
-            sb.append("✅ <code>").append(inc.id()).append("</code>")
-              .append(" — <code>").append(inc.hostId()).append("</code>")
-              .append(inc.serviceId() != null ? "/<code>" + inc.serviceId() + "</code>" : "")
-              .append("\n").append(inc.summary());
+            sb.append("✅ ").append(code(inc.id()))
+              .append(" — ").append(code(inc.hostId()))
+              .append(inc.serviceId() != null ? "/" + code(inc.serviceId()) : "")
+              .append("\n").append(esc(inc.summary()));
             if (recurrences > 0) sb.append(" <i>(повторился ×").append(recurrences).append(")</i>");
             sb.append("\n\n");
             rows.add(new InlineKeyboardRow(btn("📋 " + inc.id(), "view_incident:" + inc.id())));
@@ -277,7 +277,7 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                 answerCallback(callbackId, "Расследование уже идёт");
                 var runningIncidentText = runningId == null ? null : incidentManager.loadIncident(runningId)
                         .map(IncidentFormatter::htmlRef)
-                        .orElse("<code>" + IncidentFormatter.escapeHtml(runningId) + "</code>");
+                        .orElse(code(runningId));
                 sendWithKeyboard(chatId,
                         runningIncidentText != null
                                 ? "⚠️ Уже идёт расследование " + runningIncidentText + ". Остановить?"
@@ -287,7 +287,7 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                 answerCallback(callbackId, "Начинаю расследование...");
                 sendReply(chatId, incidentManager.loadIncident(incidentId)
                         .map(incident -> "🔍 Расследую " + IncidentFormatter.htmlRef(incident) + "...")
-                        .orElse("🔍 Расследую <code>" + incidentId + "</code>..."));
+                        .orElse("🔍 Расследую " + code(incidentId) + "..."));
             }
         } else if (data.equals("stop_investigation")) {
             var stopped = incidentManager.cancelInvestigation();
@@ -300,11 +300,11 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                 sendReply(chatId, incidentManager.loadIncident(incidentId)
                         .map(incident -> "⏭ Профайлинг пропущен для " + IncidentFormatter.htmlRef(incident)
                                 + ", инцидент открыт.")
-                        .orElse("⏭ Профайлинг <code>" + incidentId + "</code> пропущен, инцидент открыт."));
+                        .orElse("⏭ Профайлинг " + code(incidentId) + " пропущен, инцидент открыт."));
             } else {
                 sendReply(chatId, incidentManager.loadIncident(incidentId)
                         .map(incident -> "⚠️ Инцидент не в статусе PROFILING: " + IncidentFormatter.htmlRef(incident))
-                        .orElse("⚠️ Инцидент не в статусе PROFILING: <code>" + incidentId + "</code>"));
+                        .orElse("⚠️ Инцидент не в статусе PROFILING: " + code(incidentId)));
             }
 
         } else if (data.startsWith("resolve_incident:")) {
@@ -313,11 +313,11 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
             if (incidentManager.forceResolve(incidentId, "Закрыт оператором")) {
                 sendReply(chatId, incidentManager.loadIncident(incidentId)
                         .map(incident -> "✅ Инцидент закрыт: " + IncidentFormatter.htmlRef(incident))
-                        .orElse("✅ Инцидент <code>" + incidentId + "</code> закрыт."));
+                        .orElse("✅ Инцидент " + code(incidentId) + " закрыт."));
             } else {
                 sendReply(chatId, incidentManager.loadIncident(incidentId)
                         .map(incident -> "⚠️ Не удалось закрыть инцидент: " + IncidentFormatter.htmlRef(incident))
-                        .orElse("⚠️ Не удалось закрыть инцидент: <code>" + incidentId + "</code>"));
+                        .orElse("⚠️ Не удалось закрыть инцидент: " + code(incidentId)));
             }
 
         } else if (data.startsWith("view_incident:")) {
@@ -326,10 +326,10 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
             sendReply(chatId, incidentManager.loadIncident(incidentId)
                     .map(i -> {
                         var sb = new StringBuilder();
-                        sb.append("✅ <b>").append(IncidentFormatter.escapeHtml(i.id())).append("</b>\n");
-                        sb.append("Хост: <code>").append(i.hostId()).append("</code>");
-                        if (i.serviceId() != null) sb.append(" / <code>").append(i.serviceId()).append("</code>");
-                        sb.append("\n").append(IncidentFormatter.escapeHtml(i.summary())).append("\n");
+                        sb.append("✅ <b>").append(esc(i.id())).append("</b>\n");
+                        sb.append("Хост: ").append(code(i.hostId()));
+                        if (i.serviceId() != null) sb.append(" / ").append(code(i.serviceId()));
+                        sb.append("\n").append(esc(i.summary())).append("\n");
                         if (i.rootCauseHypothesis() != null)
                             sb.append("\n<b>Причина:</b>\n").append(TelegramMarkdownConverter.convert(i.rootCauseHypothesis()));
                         if (i.events() != null) {
@@ -339,7 +339,7 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
                         }
                         return sb.toString();
                     })
-                    .orElse("Инцидент не найден: <code>" + incidentId + "</code>"));
+                    .orElse("Инцидент не найден: " + code(incidentId)));
 
         } else {
             // Approval callbacks
@@ -357,18 +357,18 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         }
     }
 
-    private void sendHostDetails(String chatId, String hostId) {
+    void sendHostDetails(String chatId, String hostId) {
         var hostOpt = inventory.findHost(hostId);
         if (hostOpt.isEmpty()) {
-            sendReply(chatId, "Хост не найден: " + hostId);
+            sendReply(chatId, "Хост не найден: " + esc(hostId));
             return;
         }
         var host = hostOpt.get();
-        var sb = new StringBuilder("🖥 <b>").append(host.id()).append("</b>\n");
-        sb.append("SSH: <code>").append(host.sshTarget()).append("</code>\n");
-        sb.append("Env: ").append(host.env()).append("\n");
+        var sb = new StringBuilder("🖥 <b>").append(esc(host.id())).append("</b>\n");
+        sb.append("SSH: ").append(code(host.sshTarget())).append("\n");
+        sb.append("Env: ").append(esc(host.env())).append("\n");
         if (host.notes() != null && !host.notes().isBlank())
-            sb.append("Заметки: ").append(host.notes()).append("\n");
+            sb.append("Заметки: ").append(esc(host.notes())).append("\n");
         sb.append("\n<b>Сервисы:</b>\n");
 
         var rows = new ArrayList<InlineKeyboardRow>();
@@ -378,24 +378,24 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
             for (var s : host.services()) {
                 var hasIncident = incidentManager.hasOpenIncident(hostId, s.id());
                 sb.append(hasIncident ? "🔴 " : "🟢 ")
-                  .append("<code>").append(s.id()).append("</code>")
-                  .append(" (").append(s.runtime()).append(")\n");
+                  .append(code(s.id()))
+                  .append(" (").append(esc(s.runtime())).append(")\n");
                 rows.add(new InlineKeyboardRow(
                         btn((hasIncident ? "🔴 " : "🟢 ") + s.id(), "service:" + hostId + ":" + s.id())));
             }
         }
 
         if (host.alertTypes() != null && !host.alertTypes().isEmpty())
-            sb.append("\n⚠️ Фильтр алертов: ").append(host.alertTypes()).append("\n");
+            sb.append("\n⚠️ Фильтр алертов: ").append(esc(String.join(", ", host.alertTypes()))).append("\n");
 
         if (host.telemetry() != null && !host.telemetry().isEmpty()) {
             sb.append("\n<b>Телеметрия:</b>\n");
             for (var t : host.telemetry()) {
-                sb.append("• ").append(t.name())
+                sb.append("• ").append(esc(t.name()))
                   .append(" threshold=").append(t.threshold());
                 if (t.minDurationMs() != null)
                     sb.append(" minDuration=").append(t.minDurationMs() / 1000).append("s");
-                sb.append("\n  <code>").append(t.command()).append("</code>\n");
+                sb.append("\n  ").append(code(t.command())).append("\n");
             }
         }
 
@@ -403,32 +403,32 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         else sendWithKeyboard(chatId, sb.toString(), rows.subList(0, Math.min(rows.size(), MAX_KEYBOARD_BUTTONS)));
     }
 
-    private void sendServiceDetails(String chatId, String hostId, String serviceId) {
+    void sendServiceDetails(String chatId, String hostId, String serviceId) {
         var serviceOpt = inventory.findService(hostId, serviceId);
         if (serviceOpt.isEmpty()) {
-            sendReply(chatId, "Сервис не найден: " + serviceId);
+            sendReply(chatId, "Сервис не найден: " + esc(serviceId));
             return;
         }
         var s = serviceOpt.get();
         var hasIncident = incidentManager.hasOpenIncident(hostId, serviceId);
         var sb = new StringBuilder(hasIncident ? "🔴 " : "🟢 ");
-        sb.append("<b>").append(s.id()).append("</b>");
-        if (s.name() != null && !s.name().equals(s.id())) sb.append(" — ").append(s.name());
-        sb.append(" (").append(s.runtime()).append(")\n");
-        if (s.systemdUnit() != null) sb.append("Unit: <code>").append(s.systemdUnit()).append("</code>\n");
-        if (s.containerName() != null) sb.append("Container: <code>").append(s.containerName()).append("</code>\n");
+        sb.append("<b>").append(esc(s.id())).append("</b>");
+        if (s.name() != null && !s.name().equals(s.id())) sb.append(" — ").append(esc(s.name()));
+        sb.append(" (").append(esc(s.runtime())).append(")\n");
+        if (s.systemdUnit() != null) sb.append("Unit: ").append(code(s.systemdUnit())).append("\n");
+        if (s.containerName() != null) sb.append("Container: ").append(code(s.containerName())).append("\n");
         if (s.healthCheck() != null) {
-            sb.append("Health: <code>").append(s.healthCheck()).append("</code>");
+            sb.append("Health: ").append(code(s.healthCheck()));
             if (s.healthCheckMinDurationMs() != null)
                 sb.append(" (grace ").append(s.healthCheckMinDurationMs() / 1000).append("s)");
             sb.append("\n");
         }
-        if (s.logsCommand() != null) sb.append("Logs: <code>").append(s.logsCommand()).append("</code>\n");
-        if (s.versionUrl() != null) sb.append("VersionUrl: <code>").append(s.versionUrl()).append("</code>\n");
-        if (s.repoUrl() != null) sb.append("Repo: <code>").append(s.repoUrl()).append("</code>\n");
-        if (s.sourcesPath() != null) sb.append("Sources: <code>").append(s.sourcesPath()).append("</code>\n");
+        if (s.logsCommand() != null) sb.append("Logs: ").append(code(s.logsCommand())).append("\n");
+        if (s.versionUrl() != null) sb.append("VersionUrl: ").append(code(s.versionUrl())).append("\n");
+        if (s.repoUrl() != null) sb.append("Repo: ").append(code(s.repoUrl())).append("\n");
+        if (s.sourcesPath() != null) sb.append("Sources: ").append(code(s.sourcesPath())).append("\n");
         if (s.configFiles() != null && !s.configFiles().isEmpty())
-            sb.append("Configs: ").append(String.join(", ", s.configFiles())).append("\n");
+            sb.append("Configs: ").append(esc(String.join(", ", s.configFiles()))).append("\n");
 
         var rows = new ArrayList<InlineKeyboardRow>();
         if (hasIncident) {
@@ -505,6 +505,15 @@ public class DevopsTelegramBot implements SpringLongPollingBot, LongPollingUpdat
         } catch (TelegramApiException e) {
             log.warn("AnswerCallbackQuery failed: {}", e.getMessage());
         }
+    }
+
+    private static String esc(String text) {
+        return IncidentFormatter.escapeHtml(text);
+    }
+
+    /** Значение из инвентори/инцидента в теге <code> — всегда экранированное. */
+    private static String code(String text) {
+        return "<code>" + esc(text) + "</code>";
     }
 
     private static InlineKeyboardButton btn(String text, String data) {

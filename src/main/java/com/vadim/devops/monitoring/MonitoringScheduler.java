@@ -1,5 +1,6 @@
 package com.vadim.devops.monitoring;
 
+import com.vadim.devops.bash.HostCommand;
 import com.vadim.devops.bash.BashRunner;
 import com.vadim.devops.kb.InventoryLoader;
 import jakarta.annotation.PreDestroy;
@@ -44,8 +45,7 @@ public class MonitoringScheduler {
             for (var service : host.services()) {
                 if (stopping.get()) return;
                 if (service.healthCheck() == null) continue;
-                var result = runner.run("ssh %s '%s'".formatted(
-                        host.sshTarget(), service.healthCheck().replace("'", "'\\''")));
+                var result = runner.run(HostCommand.wrap(host.sshTarget(), service.healthCheck()));
                 if (stopping.get() || result.interrupted()) return;
                 var healthy = result.success();
                 var key = host.id() + "/" + service.id() + "/health";
@@ -82,8 +82,7 @@ public class MonitoringScheduler {
             if (host.telemetry() == null || host.telemetry().isEmpty()) continue;
             for (var check : host.telemetry()) {
                 if (stopping.get()) return;
-                var result = runner.run("ssh %s '%s'".formatted(
-                        host.sshTarget(), check.command().replace("'", "'\\''")));
+                var result = runner.run(HostCommand.wrap(host.sshTarget(), check.command()));
                 if (stopping.get() || result.interrupted()) return;
                 var raw = result.stdout().trim();
                 double value;
