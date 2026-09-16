@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +44,7 @@ class IncidentManagerTest {
     void setUp() {
         manager = new IncidentManager(kb, inventory, Optional.of(telegramNotifier), llmAgent,
                 profilingService, progressTracker, investigationContext, tokenUsageTracker,
-                3_600_000L);
+                3_600_000L, 604_800_000L);
         when(inventory.findHost(anyString())).thenReturn(Optional.of(
                 new Host("h1", "h1", "test", "1.2.3.4", "h1@example.com", null, null, null, null)));
         when(kb.findOpenIncidents()).thenReturn(List.of());
@@ -88,6 +89,58 @@ class IncidentManagerTest {
                 "Исключения в логах: java.lang.NullPointerException: boom"));
 
         verify(telegramNotifier).sendMessage(contains("🔁 Повтор"));
+    }
+
+    @Test
+    void onAnomaly_metricHighAfterInvestigatedSpike_recordsRecurrenceInsteadOfNewIncident() {
+        var prev = resolvedMetricIncident("cpu=100.0 (порог 85)", Instant.now().minusSeconds(3600),
+                "Часовая синхронизация Tilda→VK грузит единственное ядро");
+        when(kb.findLastResolvedIncident("h1", "cpu")).thenReturn(Optional.of(prev));
+
+        manager.onAnomaly(new Anomaly(Anomaly.Type.METRIC_HIGH, "h1", "cpu", "cpu=100.0 (порог 85)"));
+
+        verify(kb).saveIncident(argThat(i -> i.id().equals("inc-cpu")
+                && i.status() == Incident.Status.RESOLVED
+                && i.events().stream().anyMatch(e -> "recurrence".equals(e.eventType()))));
+        verify(telegramNotifier).sendMessage(contains("🔁 Повтор"));
+        verify(telegramNotifier, never()).sendIncidentAlert(any());
+        verify(profilingService, never()).getIfAvailable();
+    }
+
+    @Test
+    void onAnomaly_metricHighWithoutInvestigatedPredecessor_opensNewIncident() {
+        // закрыт автовосстановлением до расследования — причина неизвестна, повтором не считаем
+        var notInvestigated = resolvedMetricIncident("cpu=100.0 (порог 85)",
+                Instant.now().minusSeconds(3600), null);
+        when(kb.findLastResolvedIncident("h1", "cpu")).thenReturn(Optional.of(notInvestigated));
+
+        manager.onAnomaly(new Anomaly(Anomaly.Type.METRIC_HIGH, "h1", "cpu", "cpu=100.0 (порог 85)"));
+
+        verify(telegramNotifier).sendIncidentAlert(argThat(i -> i.status() == Incident.Status.PROFILING));
+    }
+
+    @Test
+    void onAnomaly_metricHighAfterLookbackExpired_investigatesAgain() {
+        var stale = resolvedMetricIncident("cpu=100.0 (порог 85)",
+                Instant.now().minus(Duration.ofDays(8)), "старая причина");
+        when(kb.findLastResolvedIncident("h1", "cpu")).thenReturn(Optional.of(stale));
+
+        manager.onAnomaly(new Anomaly(Anomaly.Type.METRIC_HIGH, "h1", "cpu", "cpu=100.0 (порог 85)"));
+
+        verify(telegramNotifier).sendIncidentAlert(argThat(i -> i.status() == Incident.Status.PROFILING));
+    }
+
+    @Test
+    void onAnomaly_healthFail_isNotDedupedByMetricRecurrence() {
+        manager.onAnomaly(new Anomaly(Anomaly.Type.HEALTH_FAIL, "h1", "svc1", "Health check не прошёл"));
+
+        verify(kb, never()).findLastResolvedIncident(anyString(), anyString());
+        verify(telegramNotifier).sendIncidentAlert(argThat(i -> i.status() == Incident.Status.OPEN));
+    }
+
+    private static Incident resolvedMetricIncident(String summary, Instant startedAt, String hypothesis) {
+        return new Incident("inc-cpu", "h1", "cpu", Incident.Status.RESOLVED, Incident.Severity.MEDIUM,
+                startedAt, Instant.now(), summary, hypothesis, hypothesis == null ? null : 1.0, List.of());
     }
 
     private static Incident resolvedIncident(String summary, Instant startedAt) {

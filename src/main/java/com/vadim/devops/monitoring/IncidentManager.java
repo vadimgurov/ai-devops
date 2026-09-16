@@ -47,6 +47,7 @@ public class IncidentManager {
     private final InvestigationContext investigationContext;
     private final TokenUsageTracker tokenUsageTracker;
     private final Duration recurrenceNotifyCooldown;
+    private final Duration metricRecurrenceLookback;
 
     // In-memory: only running investigations (incidentId → Future)
     private final ConcurrentHashMap<String, Future<?>> active = new ConcurrentHashMap<>();
@@ -64,7 +65,9 @@ public class IncidentManager {
                            InvestigationContext investigationContext,
                            TokenUsageTracker tokenUsageTracker,
                            @Value("${devops.monitoring.recurrence-notify-cooldown-ms:3600000}")
-                           long recurrenceNotifyCooldownMs) {
+                           long recurrenceNotifyCooldownMs,
+                           @Value("${devops.monitoring.metric-recurrence-lookback-ms:604800000}")
+                           long metricRecurrenceLookbackMs) {
         this.kb = kb;
         this.inventory = inventory;
         this.telegram = telegram;
@@ -74,6 +77,7 @@ public class IncidentManager {
         this.investigationContext = investigationContext;
         this.tokenUsageTracker = tokenUsageTracker;
         this.recurrenceNotifyCooldown = Duration.ofMillis(recurrenceNotifyCooldownMs);
+        this.metricRecurrenceLookback = Duration.ofMillis(metricRecurrenceLookbackMs);
     }
 
     @PostConstruct
@@ -109,18 +113,7 @@ public class IncidentManager {
                                 .orElse(null)
                         : null;
                 if (prev != null) {
-                    var notify = dueForRecurrenceNotification(prev);
-                    var recurred = prev.addEvent(new IncidentEvent(Instant.now(), "recurrence",
-                            Map.of("details", anomaly.details(), "notified", notify)));
-                    kb.saveIncident(recurred);
-                    var recurrenceCount = recurred.events().stream()
-                            .filter(e -> "recurrence".equals(e.eventType())).count();
-                    log.info("Повтор инцидента {} (×{}): {}", prev.id(), recurrenceCount, exceptionClass);
-                    if (notify) {
-                        telegram.ifPresent(t -> t.sendMessage(
-                                "🔁 Повтор ×" + recurrenceCount + " — " + IncidentFormatter.htmlRef(prev)
-                                        + "\n<code>" + IncidentFormatter.escapeHtml(anomaly.details()) + "</code>"));
-                    }
+                    registerRecurrence(prev, anomaly.details());
                     return;
                 }
                 // New exception — create incident and investigate
@@ -137,6 +130,13 @@ public class IncidentManager {
             }
             case HEALTH_FAIL, METRIC_HIGH -> {
                 if (hasOpenIncident(anomaly.hostId(), anomaly.serviceId())) return;
+                // Метрика уже пробивала порог на этом хосте и причина разобрана — это повтор,
+                // расследовать заново нечего (иначе каждый пик CPU = новое расследование).
+                var prevMetric = findMetricRecurrenceBase(anomaly).orElse(null);
+                if (prevMetric != null) {
+                    registerRecurrence(prevMetric, anomaly.details());
+                    return;
+                }
                 var isCpuMetric = anomaly.type() == Anomaly.Type.METRIC_HIGH
                         && "cpu".equalsIgnoreCase(anomaly.serviceId());
                 var status = isCpuMetric ? Incident.Status.PROFILING : Incident.Status.OPEN;
@@ -491,6 +491,35 @@ public class IncidentManager {
         if (details == null) return null;
         var m = EXCEPTION_CLASS_PATTERN.matcher(details);
         return m.find() ? m.group() : null;
+    }
+
+    /** Записать повтор в уже закрытый инцидент вместо открытия нового и запуска расследования. */
+    private void registerRecurrence(Incident prev, String details) {
+        var notify = dueForRecurrenceNotification(prev);
+        var recurred = prev.addEvent(new IncidentEvent(Instant.now(), "recurrence",
+                Map.of("details", details, "notified", notify)));
+        kb.saveIncident(recurred);
+        var recurrenceCount = recurred.events().stream()
+                .filter(e -> "recurrence".equals(e.eventType())).count();
+        log.info("Повтор инцидента {} (×{}): {}", prev.id(), recurrenceCount, details);
+        if (notify) {
+            telegram.ifPresent(t -> t.sendMessage(
+                    "🔁 Повтор ×" + recurrenceCount + " — " + IncidentFormatter.htmlRef(prev)
+                            + "\n<code>" + IncidentFormatter.escapeHtml(details) + "</code>"));
+        }
+    }
+
+    /** Отпечаток метрической аномалии — хост + имя метрики (serviceId у METRIC_HIGH это имя
+     *  телеметрии, а не сервис, поэтому пересечься с exception/health инцидентами не может).
+     *  Базой для повтора считаем только закрытый инцидент с гипотезой (то есть реально
+     *  расследованный) и не старше metricRecurrenceLookback — чтобы раз в окно причина
+     *  перепроверялась заново, а не подавлялась вечно. */
+    private Optional<Incident> findMetricRecurrenceBase(Anomaly anomaly) {
+        if (anomaly.type() != Anomaly.Type.METRIC_HIGH) return Optional.empty();
+        return kb.findLastResolvedIncident(anomaly.hostId(), anomaly.serviceId())
+                .filter(i -> i.rootCauseHypothesis() != null && !i.rootCauseHypothesis().isBlank())
+                .filter(i -> Duration.between(i.startedAt(), Instant.now())
+                        .compareTo(metricRecurrenceLookback) < 0);
     }
 
     /** Не шлём "Повтор" в чат на каждое срабатывание — иначе часто повторяющееся известное
